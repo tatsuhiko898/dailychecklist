@@ -12,7 +12,6 @@
   <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
-    /* カメラ表示領域 */
     #interactive {
       position: relative;
     }
@@ -22,7 +21,6 @@
       height: 100% !important;
       object-fit: cover;
     }
-    /* 念のため drawingBuffer は非表示 */
     #interactive .drawingBuffer {
       display: none !important;
     }
@@ -43,7 +41,6 @@
     <!-- カメラ & 最新情報 -->
     <section class="mb-6">
       <div class="grid md:grid-cols-[280px,1fr] gap-4">
-        <!-- カメラ -->
         <div>
           <h2 class="font-semibold mb-2">カメラ</h2>
           <div id="interactive"
@@ -66,7 +63,6 @@
           </p>
         </div>
 
-        <!-- 最新読み取り結果 -->
         <div>
           <h2 class="font-semibold mb-2">読み取り情報</h2>
           <div class="bg-white rounded-xl border p-4 space-y-2">
@@ -114,13 +110,12 @@
     var lastScanTime = 0;
     var lastScanCode = null;
 
-    var currentStream = null;      // getUserMedia の MediaStream
-    var currentVideoEl = null;     // 表示中の video 要素
-    var scanCanvas = null;         // フレームキャプチャ用 canvas
+    var currentStream = null;
+    var currentVideoEl = null;
+    var scanCanvas = null;
     var scanContext = null;
-    var scanTimerId = null;        // setInterval ID
+    var scanTimerId = null;
 
-    // DOM 参照
     var statusMessage = document.getElementById("statusMessage");
     var lastIsbnEl = document.getElementById("lastIsbn");
     var lastTitleEl = document.getElementById("lastTitle");
@@ -132,11 +127,7 @@
     function loadBooks() {
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          books = JSON.parse(raw);
-        } else {
-          books = [];
-        }
+        books = raw ? JSON.parse(raw) : [];
       } catch (e) {
         books = [];
       }
@@ -147,7 +138,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
     }
 
-    // ====== 書籍リスト描画 ======
+    // ====== リスト描画 ======
     function renderBooks() {
       booksListEl.innerHTML = "";
       if (!books.length) {
@@ -233,7 +224,6 @@
           title: info.title,
           authors: info.authors
         };
-        // 最新を先頭に追加
         books.unshift(book);
         saveBooks();
         renderBooks();
@@ -245,7 +235,7 @@
       });
     }
 
-    // ====== カメラ起動（getUserMedia） ======
+    // ====== カメラ起動 ======
     function startCamera() {
       statusMessage.textContent = "カメラ起動処理を開始します…";
 
@@ -253,35 +243,30 @@
         statusMessage.textContent = "すでにカメラは起動中です。";
         return;
       }
-
       if (typeof Quagga === "undefined") {
         statusMessage.textContent =
           "Quagga.js が読み込めていません。ネットワーク接続を確認してください。";
         return;
       }
-
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         statusMessage.textContent =
-          "このブラウザはカメラ取得（getUserMedia）に対応していません。";
+          "このブラウザは getUserMedia に対応していません。";
         return;
       }
 
       var target = document.getElementById("interactive");
       target.innerHTML = "";
 
-      // video 要素を自前で作成
       var video = document.createElement("video");
       video.setAttribute("autoplay", "true");
-      video.setAttribute("playsinline", "true"); // iOS / Android 用
+      video.setAttribute("playsinline", "true");
       video.setAttribute("muted", "true");
       video.className = "w-full h-full object-cover";
       currentVideoEl = video;
       target.appendChild(video);
 
       var constraints = {
-        video: {
-          facingMode: { ideal: "environment" }
-        },
+        video: { facingMode: { ideal: "environment" } },
         audio: false
       };
 
@@ -302,7 +287,7 @@
           console.error("getUserMedia error:", err);
           statusMessage.textContent =
             "カメラ起動に失敗しました（" + err.name +
-            "）。HTTPS または localhost で開いているか、カメラ権限を確認してください。";
+            "）。HTTPS または localhost / カメラ権限を確認してください。";
           isCameraRunning = false;
           currentStream = null;
           currentVideoEl = null;
@@ -310,13 +295,12 @@
         });
     }
 
-    // ====== スキャンループ（Quagga.decodeSingle） ======
+    // ====== スキャンループ（ここを重点修正：canvas を直接 Quagga に渡す） ======
     function startScanningLoop(video) {
       if (!scanCanvas) {
         scanCanvas = document.createElement("canvas");
         scanContext = scanCanvas.getContext("2d");
       }
-
       if (scanTimerId) {
         clearInterval(scanTimerId);
       }
@@ -329,7 +313,6 @@
         var h = video.videoHeight;
         if (!w || !h) return;
 
-        // 過度に大きい場合は縮小して負荷軽減（例：最大横幅 800）
         var maxW = 800;
         var scale = 1;
         if (w > maxW) {
@@ -342,14 +325,13 @@
         scanCanvas.height = dh;
         scanContext.drawImage(video, 0, 0, dw, dh);
 
-        var dataUrl = scanCanvas.toDataURL("image/png");
-
+        // ★ canvas 要素そのものを src に渡す
         Quagga.decodeSingle({
-          src: dataUrl,
+          src: scanCanvas,
           numOfWorkers: 0,
           inputStream: {
-            size: 800,          // 内部スケール指定
-            singleChannel: false
+            size: 640,
+            singleChannel: true  // グレースケールとして扱う
           },
           locator: {
             patchSize: "medium",
@@ -361,13 +343,12 @@
           locate: true
         }, function(result) {
           if (!result || !result.codeResult || !result.codeResult.code) {
-            // 読めない場合は何もしない（ステータスを頻繁に書き換えない）
             return;
           }
           var code = result.codeResult.code;
           onBarcodeDetected(code);
         });
-      }, 700); // 0.7秒おきに解析
+      }, 700);
     }
 
     // ====== カメラ停止 ======
@@ -379,13 +360,11 @@
         return;
       }
 
-      // スキャンループ停止
       if (scanTimerId) {
         clearInterval(scanTimerId);
         scanTimerId = null;
       }
 
-      // MediaStream を停止
       if (currentStream && currentStream.getTracks) {
         try {
           var tracks = currentStream.getTracks();
@@ -398,11 +377,8 @@
         currentStream = null;
       }
 
-      // video 要素の停止・破棄
       if (currentVideoEl) {
-        try {
-          currentVideoEl.pause();
-        } catch (e3) {}
+        try { currentVideoEl.pause(); } catch (e3) {}
         try {
           if (currentVideoEl.srcObject && currentVideoEl.srcObject.getTracks) {
             var vTracks = currentVideoEl.srcObject.getTracks();
@@ -412,11 +388,8 @@
           }
         } catch (e4) {}
         currentVideoEl.srcObject = null;
-
         var parent = currentVideoEl.parentNode;
-        if (parent) {
-          parent.removeChild(currentVideoEl);
-        }
+        if (parent) parent.removeChild(currentVideoEl);
         currentVideoEl = null;
       }
 
@@ -427,11 +400,10 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出処理（decodeSingleの結果） ======
+    // ====== バーコード検出処理 ======
     function onBarcodeDetected(code) {
       var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 2000) {
-        // 2秒以内に同じコードを連続検出したら無視
         return;
       }
       lastScanCode = code;
@@ -440,7 +412,6 @@
       statusMessage.textContent = "バーコード検出: " + code;
 
       var cleaned = code.replace(/[^0-9]/g, "");
-      // ISBN-13 の簡易判定（13桁 & 先頭 978 / 979）
       var isbn13 = /^97[89]/;
       if (cleaned.length !== 13 || !isbn13.test(cleaned)) {
         statusMessage.textContent =
@@ -454,13 +425,8 @@
     }
 
     // ====== イベント登録 ======
-    document.getElementById("startCameraBtn").addEventListener("click", function() {
-      startCamera();
-    });
-
-    document.getElementById("stopCameraBtn").addEventListener("click", function() {
-      stopCamera();
-    });
+    document.getElementById("startCameraBtn").addEventListener("click", startCamera);
+    document.getElementById("stopCameraBtn").addEventListener("click", stopCamera);
 
     document.getElementById("clearAllBtn").addEventListener("click", function() {
       if (!books.length) return;
