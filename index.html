@@ -10,6 +10,28 @@
 
   <!-- Quagga.js CDN -->
   <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+
+  <!-- ★ カメラ表示調整用のCSSを追加 -->
+  <style>
+    /* Quagga が追加する video / canvas をコンテナにフィットさせる */
+    #interactive {
+      position: relative;
+    }
+
+    #interactive video,
+    #interactive canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+    }
+
+    /* drawingBuffer がずれて右半分しか見えないのを防ぐ */
+    #interactive .drawingBuffer {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
   <div class="max-w-4xl mx-auto px-4 py-6">
@@ -307,6 +329,11 @@
       const target = document.getElementById("interactive");
       target.innerHTML = ""; // Quagga用に空にする
 
+      // 念のためリスナーを一度解除してからセット
+      if (Quagga.offDetected) {
+        Quagga.offDetected(onBarcodeDetected);
+      }
+
       Quagga.init(
         {
           inputStream: {
@@ -343,69 +370,5 @@
 
     function stopCamera() {
       if (!isCameraRunning) return;
-      Quagga.stop();
-      Quagga.offDetected(onBarcodeDetected);
-      isCameraRunning = false;
-      const target = document.getElementById("interactive");
-      target.innerHTML = "カメラ停止中";
-      statusMessage.textContent = "カメラを停止しました。";
-    }
 
-    async function onBarcodeDetected(result) {
-      if (!result || !result.codeResult || !result.codeResult.code) return;
-
-      const code = result.codeResult.code.trim();
-      const now = Date.now();
-
-      // 連続検出対策: 同じコードを短時間に何度も読んだ場合は無視
-      if (code === lastScanCode && now - lastScanTime < 3000) {
-        return;
-      }
-      lastScanCode = code;
-      lastScanTime = now;
-
-      // ISBN-13として妥当か簡易チェック（13桁、先頭978か979）
-      const cleaned = code.replace(/[^0-9]/g, "");
-      if (cleaned.length !== 13 || !/^97[89]/.test(cleaned)) {
-        statusMessage.textContent =
-          "バーコードを読み取りましたが、ISBN-13ではないようです。";
-        return;
-      }
-
-      statusMessage.textContent = `ISBN ${cleaned} を読み取りました。登録処理を行います…`;
-
-      // 書籍登録処理
-      await registerBook(cleaned);
-    }
-
-    // ======== イベントハンドラ ========
-    startCameraBtn.addEventListener("click", () => {
-      startCamera();
-    });
-
-    stopCameraBtn.addEventListener("click", () => {
-      stopCamera();
-    });
-
-    clearAllBtn.addEventListener("click", () => {
-      if (
-        books.length > 0 &&
-        confirm("登録されているすべての書籍情報を削除しますか？")
-      ) {
-        books = [];
-        saveBooksToStorage();
-        renderBooks();
-        lastIsbnEl.textContent = "";
-        lastTitleEl.textContent = "";
-        lastAuthorsEl.textContent = "";
-        statusMessage.textContent = "すべての書籍情報を削除しました。";
-      }
-    });
-
-    // ページ読み込み時にローカルストレージからデータ復元
-    window.addEventListener("DOMContentLoaded", () => {
-      loadBooksFromStorage();
-    });
-  </script>
-</body>
-</html>
+      // Qu
