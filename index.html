@@ -1,52 +1,345 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<title>服薬記録アプリ（月曜日はじまり）</title>
-<style>
-:root {
-  --accent:#007bff;
-  --bg:#f5f5f5;
-  --card-bg:#ffffff;
-  --border:#dddddd;
-  --text-main:#333333;
-  --text-muted:#aaaaaa;
-}
-*{box-sizing:border-box;}
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:var(--bg);
-  color:var(--text-main);
-}
-.app-container{max-width:900px;margin:16px auto;padding:16px;}
-.card{
-  background:#fff;border-radius:12px;padding:16px;
-  box-shadow:0 2px 6px rgba(0,0,0,.06);margin-bottom:14px;
-}
-h1{text-align:center;font-size:1.3rem}
+  <meta charset="UTF-8">
+  <title>服薬記録アプリ（朝・昼・晩）</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-/* カレンダー */
-.calendar-header{
-  display:flex;justify-content:space-between;align-items:center;margin-bottom:6px
-}
-.calendar-nav-btn{
-  border:1px solid var(--border);background:#fff;
-  padding:4px 10px;border-radius:8px;cursor:pointer
-}
-.calendar-header-title{font-weight:bold}
-table.calendar{
-  width:100%;border-collapse:collapse;table-layout:fixed;
-  margin-left:auto;margin-right:auto; /* 中央配置 */
-}
-.calendar thead th{
-  padding:4px 0;border-bottom:1px solid var(--border);font-size:.8rem
-}
-.calendar tbody td{
-  border:1px solid var(--border);
-  height:74px;padding:4px;cursor:pointer;text-align:center; /* 中央寄せ */
-}
-.calendar-day{display:flex;flex-direction:column;gap:2px}
-.calendar-day-inner{align-items:center;} /* 中央に整列 */
-.date-number{font-size:.85rem;font-weight:600}
-.slot-label{font-size:.
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: #f5f5f5;
+    }
+
+    /* 画面中央にカード風レイアウトで配置 */
+    .app {
+      max-width: 720px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 24px 32px 32px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+      letter-spacing: 0.06em;
+      text-align: center;
+    }
+
+    /* 年月＋前後ボタン */
+    .month-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .nav-btn {
+      border: 1px solid #ccc;
+      background: #fafafa;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .nav-btn:hover {
+      background: #ececec;
+    }
+
+    .month-text {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    /* カレンダー */
+    table.calendar {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-top: 8px;
+    }
+
+    .calendar th,
+    .calendar td {
+      border: 1px solid #e0e0e0;
+      padding: 4px 2px;
+      vertical-align: top;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .calendar th {
+      text-align: center;
+      background: #fafafa;
+      font-weight: 600;
+    }
+
+    .calendar td {
+      height: 64px;
+      position: relative;
+    }
+
+    .day-number {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .records-text {
+      font-size: 11px;
+      line-height: 1.3;
+      white-space: normal;
+      word-break: break-all;
+    }
+
+    /* 土日色 */
+    .dow-sat {
+      color: #1976d2;
+    }
+    .dow-sun {
+      color: #e53935;
+    }
+
+    /* 選択中の日付を少し目立たせる */
+    .calendar td.selected {
+      outline: 2px solid #1976d2;
+      outline-offset: -2px;
+      background: #e3f2fd;
+    }
+
+    /* 詳細エリア */
+    .detail {
+      margin-top: 24px;
+      border-top: 1px solid #e0e0e0;
+      padding-top: 16px;
+    }
+
+    .detail-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .detail-date {
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 14px;
+    }
+
+    label {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>服薬記録アプリ（朝・昼・晩）</h1>
+
+    <div class="month-header">
+      <button class="nav-btn" id="prevMonthBtn">◀ 前の月</button>
+      <div class="month-text" id="monthText"></div>
+      <button class="nav-btn" id="nextMonthBtn">次の月 ▶</button>
+    </div>
+
+    <table class="calendar" id="calendar">
+      <thead>
+        <tr>
+          <th>月</th>
+          <th>火</th>
+          <th>水</th>
+          <th>木</th>
+          <th>金</th>
+          <th class="dow-sat">土</th>
+          <th class="dow-sun">日</th>
+        </tr>
+      </thead>
+      <tbody id="calendarBody"></tbody>
+    </table>
+
+    <div class="detail">
+      <div class="detail-title">服薬状況の詳細</div>
+      <div class="detail-date" id="detailDateText"></div>
+
+      <div class="checkbox-group">
+        <label><input type="checkbox" id="checkMorning"> 朝</label>
+        <label><input type="checkbox" id="checkNoon"> 昼</label>
+        <label><input type="checkbox" id="checkNight"> 晩</label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const monthText = document.getElementById('monthText');
+    const calendarBody = document.getElementById('calendarBody');
+    const detailDateText = document.getElementById('detailDateText');
+
+    const checkMorning = document.getElementById('checkMorning');
+    const checkNoon = document.getElementById('checkNoon');
+    const checkNight = document.getElementById('checkNight');
+
+    const prevMonthBtn = document.getElementById('prevMonthBtn');
+    const nextMonthBtn = document.getElementById('nextMonthBtn');
+
+    let currentDate = new Date();
+    let selectedDate = new Date();
+
+    const STORAGE_KEY = 'med_records_v1';
+
+    function loadRecords() {
+      const json = localStorage.getItem(STORAGE_KEY);
+      if (!json) return {};
+      try {
+        return JSON.parse(json) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveRecords(records) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function formatDateKey(date) {
+      const y = date.getFullYear();
+      const m = ('0' + (date.getMonth() + 1)).slice(-2);
+      const d = ('0' + date.getDate()).slice(-2);
+      return `${y}-${m}-${d}`;
+    }
+
+    function renderCalendar() {
+      const y = currentDate.getFullYear();
+      const m = currentDate.getMonth();
+
+      monthText.textContent = `${y}年${m + 1}月`;
+
+      calendarBody.innerHTML = '';
+
+      const firstDay = new Date(y, m, 1);
+      const lastDay = new Date(y, m + 1, 0);
+      const startDow = (firstDay.getDay() + 6) % 7; // 月曜始まりに調整
+      const totalDays = lastDay.getDate();
+
+      const records = loadRecords();
+      const selectedKey = formatDateKey(selectedDate);
+
+      let day = 1 - startDow;
+      for (let week = 0; week < 6; week++) {
+        const tr = document.createElement('tr');
+
+        for (let dow = 0; dow < 7; dow++) {
+          const td = document.createElement('td');
+
+          if (day >= 1 && day <= totalDays) {
+            const cellDate = new Date(y, m, day);
+            const key = formatDateKey(cellDate);
+
+            const dayNumber = document.createElement('div');
+            dayNumber.className = 'day-number';
+            dayNumber.textContent = day;
+
+            if (dow === 5) dayNumber.classList.add('dow-sat');
+            if (dow === 6) dayNumber.classList.add('dow-sun');
+
+            const record = records[key] || {};
+            let text = '';
+            if (record.morning) text += '朝';
+            if (record.noon) text += '昼';
+            if (record.night) text += '晩';
+
+            const recDiv = document.createElement('div');
+            recDiv.className = 'records-text';
+            recDiv.textContent = text;
+
+            td.appendChild(dayNumber);
+            td.appendChild(recDiv);
+
+            td.addEventListener('click', () => {
+              selectedDate = cellDate;
+              updateDetailArea();
+              renderCalendar();
+            });
+
+            if (key === selectedKey) {
+              td.classList.add('selected');
+            }
+          } else {
+            td.textContent = '';
+          }
+
+          tr.appendChild(td);
+          day++;
+        }
+
+        calendarBody.appendChild(tr);
+        if (day > totalDays) break;
+      }
+    }
+
+    function updateDetailArea() {
+      const y = selectedDate.getFullYear();
+      const m = selectedDate.getMonth() + 1;
+      const d = selectedDate.getDate();
+      const weekday = ['日','月','火','水','木','金','土'][selectedDate.getDay()];
+
+      detailDateText.textContent = `${y}年${m}月${d}日（${weekday}）`;
+
+      const key = formatDateKey(selectedDate);
+      const records = loadRecords();
+      const record = records[key] || {};
+
+      checkMorning.checked = !!record.morning;
+      checkNoon.checked   = !!record.noon;
+      checkNight.checked  = !!record.night;
+    }
+
+    function attachCheckboxHandlers() {
+      function updateRecord() {
+        const key = formatDateKey(selectedDate);
+        const records = loadRecords();
+        records[key] = {
+          morning: checkMorning.checked,
+          noon: checkNoon.checked,
+          night: checkNight.checked
+        };
+        saveRecords(records);
+        renderCalendar();
+      }
+
+      checkMorning.addEventListener('change', updateRecord);
+      checkNoon.addEventListener('change', updateRecord);
+      checkNight.addEventListener('change', updateRecord);
+    }
+
+    prevMonthBtn.addEventListener('click', () => {
+      currentDate.setMonth(currentDate.getMonth() - 1);
+      renderCalendar();
+    });
+
+    nextMonthBtn.addEventListener('click', () => {
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      renderCalendar();
+    });
+
+    // 初期化
+    (function init() {
+      attachCheckboxHandlers();
+      selectedDate = new Date();
+      updateDetailArea();
+      renderCalendar();
+    })();
+  </script>
+</body>
+</html>
