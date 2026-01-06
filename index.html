@@ -12,7 +12,7 @@
   <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
-    /* カメラ表示領域の基本スタイル */
+    /* カメラ表示領域 */
     #interactive {
       position: relative;
     }
@@ -22,7 +22,7 @@
       height: 100% !important;
       object-fit: cover;
     }
-    /* 右側が黒く見える原因の drawingBuffer キャンバスを非表示 */
+    /* 右側が黒く見える原因の drawingBuffer を念のため非表示 */
     #interactive .drawingBuffer {
       display: none !important;
     }
@@ -62,7 +62,7 @@
             </button>
           </div>
           <p id="statusMessage" class="mt-2 text-xs text-slate-600">
-            カメラを起動してバーコードをかざしてください。
+            準備完了：カメラ起動ボタンを押してください。
           </p>
         </div>
 
@@ -113,8 +113,11 @@
     var isCameraRunning = false;
     var lastScanTime = 0;
     var lastScanCode = null;
-    var currentStream = null;      // MediaStream を保持
-    var quaggaReady = false;       // Quagga.init が成功したか
+
+    var currentStream = null;      // getUserMedia の MediaStream
+    var scanCanvas = null;         // フレームキャプチャ用 canvas
+    var scanContext = null;
+    var scanTimerId = null;        // setInterval ID
 
     // DOM 参照
     var statusMessage = document.getElementById("statusMessage");
@@ -230,6 +233,7 @@
           title: info.title,
           authors: info.authors
         };
+        // 最新を先頭に追加
         books.unshift(book);
         saveBooks();
         renderBooks();
@@ -241,7 +245,7 @@
       });
     }
 
-    // ====== カメラ起動 ======
+    // ====== カメラ起動（getUserMedia） ======
     function startCamera() {
       statusMessage.textContent = "カメラ起動処理を開始します…";
 
@@ -250,84 +254,117 @@
         return;
       }
 
-      // Quagga 読み込みチェック
       if (typeof Quagga === "undefined") {
         statusMessage.textContent =
-          "Quagga.js が読み込めていません。ネットワーク接続やCDNへのアクセスを確認してください。";
+          "Quagga.js が読み込めていません。ネットワーク接続を確認してください。";
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusMessage.textContent =
+          "このブラウザはカメラ取得（getUserMedia）に対応していません。";
         return;
       }
 
       var target = document.getElementById("interactive");
       target.innerHTML = "";
 
-      // 念のため前回のイベントを解除
-      if (typeof Quagga.offDetected === "function") {
-        Quagga.offDetected(onBarcodeDetected);
-      }
+      // video 要素を自前で作成
+      var video = document.createElement("video");
+      video.setAttribute("autoplay", "true");
+      video.setAttribute("playsinline", "true"); // iOS / Android 用
+      video.setAttribute("muted", "true");
+      video.className = "w-full h-full object-cover";
+      target.appendChild(video);
 
-      var config = {
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: target,
-          constraints: {
-            facingMode: "environment",
-            width: { min: 640 },
-            height: { min: 480 }
-          }
+      var constraints = {
+        video: {
+          facingMode: { ideal: "environment" }
         },
-        decoder: {
-          readers: ["ean_reader", "ean_13_reader"]
-        },
-        locate: true
+        audio: false
       };
 
-      Quagga.init(config, function(err) {
-        if (err) {
-          console.error("Quagga.init error:", err);
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+          currentStream = stream;
+          video.srcObject = stream;
+          video.onloadedmetadata = function() {
+            video.play();
+          };
+          isCameraRunning = true;
           statusMessage.textContent =
-            "カメラ起動に失敗しました。HTTPSで開いているか、カメラ権限を確認してください。";
-          return;
-        }
+            "カメラ起動しました。バーコードを中央にかざしてください。";
 
-        quaggaReady = true;
-        Quagga.start();
-        isCameraRunning = true;
-        statusMessage.textContent = "カメラ起動しました。バーコードを中央にかざしてください。";
+          startScanningLoop(video);
+        })
+        ["catch"](function(err) {
+          console.error("getUserMedia error:", err);
+          statusMessage.textContent =
+            "カメラ起動に失敗しました（" + err.name +
+            "）。HTTPS または localhost で開いているか、カメラ権限を確認してください。";
+          isCameraRunning = false;
+          currentStream = null;
+          target.innerHTML = "カメラ停止中";
+        });
+    }
 
-        // 少し待ってから video.srcObject を保存
-        setTimeout(function() {
-          var video = target.querySelector("video");
-          if (video && video.srcObject && video.srcObject.getTracks) {
-            currentStream = video.srcObject;
+    // ====== スキャンループ（Quagga.decodeSingle） ======
+    function startScanningLoop(video) {
+      if (!scanCanvas) {
+        scanCanvas = document.createElement("canvas");
+        scanContext = scanCanvas.getContext("2d");
+      }
+
+      if (scanTimerId) {
+        clearInterval(scanTimerId);
+      }
+
+      scanTimerId = setInterval(function() {
+        if (!isCameraRunning) return;
+        if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+        var w = video.videoWidth;
+        var h = video.videoHeight;
+        if (!w || !h) return;
+
+        scanCanvas.width = w;
+        scanCanvas.height = h;
+        scanContext.drawImage(video, 0, 0, w, h);
+
+        var dataUrl = scanCanvas.toDataURL("image/png");
+
+        // Quagga を使って 1フレームだけ解析
+        Quagga.decodeSingle({
+          src: dataUrl,
+          numOfWorkers: 0,
+          decoder: {
+            readers: ["ean_reader", "ean_13_reader"]
+          },
+          locate: true
+        }, function(result) {
+          if (!result || !result.codeResult || !result.codeResult.code) {
+            return;
           }
-        }, 500);
-      });
-
-      Quagga.onDetected(onBarcodeDetected);
+          var code = result.codeResult.code;
+          onBarcodeDetected(code);
+        });
+      }, 700); // 0.7秒おきに解析
     }
 
     // ====== カメラ停止 ======
     function stopCamera() {
       statusMessage.textContent = "カメラ停止処理を実行します…";
 
-      if (!isCameraRunning && !quaggaReady) {
+      if (!isCameraRunning && !currentStream) {
         statusMessage.textContent = "カメラはすでに停止しています。";
         return;
       }
 
-      try {
-        if (typeof Quagga !== "undefined") {
-          Quagga.stop();
-          if (typeof Quagga.offDetected === "function") {
-            Quagga.offDetected(onBarcodeDetected);
-          }
-        }
-      } catch (e) {
-        console.warn("Quagga.stop error:", e);
+      if (scanTimerId) {
+        clearInterval(scanTimerId);
+        scanTimerId = null;
       }
 
-      // MediaStream を停止
       if (currentStream && currentStream.getTracks) {
         try {
           var tracks = currentStream.getTracks();
@@ -340,47 +377,29 @@
         currentStream = null;
       }
 
-      // video 側も念のため停止
       var target = document.getElementById("interactive");
-      var video = target.querySelector("video");
-      if (video && video.srcObject && video.srcObject.getTracks) {
-        try {
-          var vTracks = video.srcObject.getTracks();
-          for (var j = 0; j < vTracks.length; j++) {
-            vTracks[j].stop();
-          }
-        } catch (e3) {}
-        video.srcObject = null;
-      }
+      target.innerHTML = "カメラ停止中";
 
       isCameraRunning = false;
-      quaggaReady = false;
-      target.innerHTML = "カメラ停止中";
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出 ======
-    function onBarcodeDetected(result) {
-      if (!result || !result.codeResult || !result.codeResult.code) {
-        return;
-      }
-
-      var code = result.codeResult.code;
+    // ====== バーコード検出処理（decodeSingleの結果） ======
+    function onBarcodeDetected(code) {
       var now = Date.now();
-
-      // 連続検出の抑制
       if (code === lastScanCode && now - lastScanTime < 2000) {
+        // 2秒以内に同じコードを連続検出したら無視
         return;
       }
       lastScanCode = code;
       lastScanTime = now;
 
-      // 認識されていることをまず表示
       statusMessage.textContent = "バーコード検出: " + code;
 
-      // ISBN-13 の簡易判定（13 桁 & 先頭 978 / 979）
       var cleaned = code.replace(/[^0-9]/g, "");
-      if (cleaned.length !== 13 || !/^97[89]/.test(cleaned)) {
+      // ISBN-13 の簡易判定（13桁 & 先頭 978 / 979）
+      var isbn13 = /^97[89]/;
+      if (cleaned.length !== 13 || !isbn13.test(cleaned)) {
         statusMessage.textContent =
           "バーコードは読み取りましたが、ISBN-13ではないようです（" + code + "）。";
         return;
@@ -415,8 +434,8 @@
 
     window.addEventListener("DOMContentLoaded", function() {
       loadBooks();
-      // ここで一応「スクリプトは生きている」ことを示す
-      statusMessage.textContent = "準備完了：カメラ起動ボタンを押してください。";
+      statusMessage.textContent =
+        "準備完了：カメラ起動ボタンを押してください。（必ず HTTPS または localhost で開いてください）";
     });
   </script>
 </body>
