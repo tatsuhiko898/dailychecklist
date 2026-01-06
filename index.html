@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>日常チェック記録アプリ</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --border: #e0e0e7;
+      --text: #222222;
+      --muted: #777777;
+      --accent: #2563eb;
+      --accent-soft: #e2edff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px 12px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 720px;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    h1 { margin: 0 0 4px; font-size: 1.4rem; }
+
+    .description {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .btn {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .btn-main { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn:hover { opacity: .9; }
+
+    .task-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fcfcff;
+    }
+
+    .task-item {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      transition: background .15s, border-color .15s;
+    }
+
+    .task-item:last-child { border-bottom: none; }
+
+    .task-top {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .task-checkbox input { width: 18px; height: 18px; cursor: pointer; }
+
+    .task-name {
+      font-size: .95rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .task-time {
+      margin-top: 4px;
+      padding-left: 28px;
+      font-size: .78rem;
+      color: var(--muted);
+      min-height: 1em;
+    }
+
+    .task-item.task-checked {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .task-item.task-checked .task-name {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .delete-button {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      padding: 4px 10px;
+      font-size: .75rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .delete-button:hover { border-color:#ef4444; color:#ef4444; }
+
+    .add-area {
+      display: flex; gap: 8px; margin-top: 10px;
+    }
+
+    .add-area input {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      font-size: .9rem;
+    }
+
+    .add-area input:focus { outline:none; border-color:var(--accent); background:#fff; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>日常の実行記録</h1>
+    <p class="description">チェックすると2行目に日時が表示されます。</p>
+
+    <button id="clear-checks-button" class="btn">すべてオフ</button>
+
+    <ul id="task-list" class="task-list"></ul>
+
+    <div class="add-area">
+      <input id="new-task-input" placeholder="新しい項目名を入力" />
+      <button id="add-task-button" class="btn btn-main">追加</button>
+    </div>
+  </div>
+
+  <script>
+    var STORAGE_KEY = "dailyTasks_v2";
+    var defaultTasks = [
+      { name:"鍵の施錠", checked:false, timestamp:"" },
+      { name:"窓の施錠", checked:false, timestamp:"" },
+      { name:"部屋の消灯", checked:false, timestamp:"" }
+    ];
+
+    var taskList = document.getElementById("task-list");
+    var newTaskInput = document.getElementById("new-task-input");
+    var addTaskButton = document.getElementById("add-task-button");
+    var clearChecksButton = document.getElementById("clear-checks-button");
+    var tasks = [];
+
+    function loadTasks(){
+      console.log("[LOAD] 既存データを読み込みます");
+      var d = localStorage.getItem(STORAGE_KEY);
+
+      if(!d){
+        console.log("[LOAD] データが無いので初期データを使用します");
+        tasks = defaultTasks.slice();
+        saveTasks();
+        return;
+      }
+
+      try{
+        tasks = JSON.parse(d) || defaultTasks.slice();
+        console.log("[LOAD] データ読み込み成功:", tasks);
+      }catch(e){
+        console.log("[LOAD] JSON 解析失敗。初期化します。", e);
+        tasks = defaultTasks.slice();
+      }
+
+      saveTasks();
+    }
+
+    function saveTasks(){
+      console.log("[SAVE] 保存します:", tasks);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    function renderTasks(){
+      console.log("[RENDER] 画面を更新します");
+      taskList.innerHTML="";
+
+      tasks.forEach(function(task,i){
+        var li=document.createElement("li");
+        li.className="task-item";
+        if(task.checked) li.classList.add("task-checked");
+
+        var top=document.createElement("div");
+        top.className="task-top";
+
+        var cbWrap=document.createElement("div");
+        cbWrap.className="task-checkbox";
+
+        var cb=document.createElement("input");
+        cb.type="checkbox";
+        cb.checked=task.checked;
+        cbWrap.appendChild(cb);
+
+        var name=document.createElement("div");
+        name.className="task-name";
+        name.textContent=task.name;
+
+        var del=document.createElement("button");
+        del.className="delete-button";
+        del.textContent="削除";
+
+        top.appendChild(cbWrap);
+        top.appendChild(name);
+        top.appendChild(del);
+
+        var time=document.createElement("div");
+        time.className="task-time";
+        time.textContent = task.timestamp ? "チェックした日時: " + task.timestamp : "";
+
+        cb.addEventListener("change",function(){
+          console.log("[CHECK]", task.name, "→", cb.checked);
+
+          if(cb.checked){
+            var now=new Date();
+            var t=now.toLocaleString("ja-JP");
+            tasks[i].checked=true;
+            tasks[i].timestamp=t;
+            time.textContent="チェックした日時: "+t;
+            li.classList.add("task-checked");
+          }else{
+            tasks[i].checked=false;
+            tasks[i].timestamp="";
+            time.textContent="";
+            li.classList.remove("task-checked");
+          }
+          saveTasks();
+        });
+
+        del.addEventListener("click",function(){
+          console.log("[DELETE] 削除:", task.name);
+          tasks.splice(i,1);
+          saveTasks();
+          renderTasks();
+        });
+
+        li.appendChild(top);
+        li.appendChild(time);
+        taskList.appendChild(li);
+      });
+    }
+
+    function addNewTask(){
+      var name=newTaskInput.value.trim();
+      if(!name){
+        console.log("[ADD] 空の入力だったので追加しません");
+        return;
+      }
+
+      console.log("[ADD] 追加:", name);
+      tasks.push({name:name,checked:false,timestamp:""});
+      saveTasks();
+      renderTasks();
+      newTaskInput.value="";
+    }
+
+    function clearAllChecks(){
+      console.log("[CLEAR] すべてのチェックをオフにします");
+      tasks = tasks.map(t=>({name:t.name,checked:false,timestamp:""}));
+      saveTasks();
+      renderTasks();
+    }
+
+    loadTasks();
+    renderTasks();
+
+    addTaskButton.addEventListener("click",addNewTask);
+    newTaskInput.addEventListener("keydown",e=>{ if(e.key==="Enter") addNewTask(); });
+    clearChecksButton.addEventListener("click",clearAllChecks);
+  </script>
+</body>
+</html>
