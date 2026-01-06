@@ -22,7 +22,7 @@
       height: 100% !important;
       object-fit: cover;
     }
-    /* 右側が黒く見える原因の drawingBuffer を念のため非表示 */
+    /* 念のため drawingBuffer は非表示 */
     #interactive .drawingBuffer {
       display: none !important;
     }
@@ -62,7 +62,7 @@
             </button>
           </div>
           <p id="statusMessage" class="mt-2 text-xs text-slate-600">
-            準備完了：カメラ起動ボタンを押してください。
+            準備完了：カメラ起動ボタンを押してください。（HTTPS または localhost で開いてください）
           </p>
         </div>
 
@@ -115,6 +115,7 @@
     var lastScanCode = null;
 
     var currentStream = null;      // getUserMedia の MediaStream
+    var currentVideoEl = null;     // 表示中の video 要素
     var scanCanvas = null;         // フレームキャプチャ用 canvas
     var scanContext = null;
     var scanTimerId = null;        // setInterval ID
@@ -214,8 +215,7 @@
     }
 
     function registerBook(isbn) {
-      var i;
-      for (i = 0; i < books.length; i++) {
+      for (var i = 0; i < books.length; i++) {
         if (books[i].isbn === isbn) {
           statusMessage.textContent = "すでに登録されているISBNです。";
           lastIsbnEl.textContent = books[i].isbn;
@@ -275,6 +275,7 @@
       video.setAttribute("playsinline", "true"); // iOS / Android 用
       video.setAttribute("muted", "true");
       video.className = "w-full h-full object-cover";
+      currentVideoEl = video;
       target.appendChild(video);
 
       var constraints = {
@@ -304,6 +305,7 @@
             "）。HTTPS または localhost で開いているか、カメラ権限を確認してください。";
           isCameraRunning = false;
           currentStream = null;
+          currentVideoEl = null;
           target.innerHTML = "カメラ停止中";
         });
     }
@@ -327,22 +329,39 @@
         var h = video.videoHeight;
         if (!w || !h) return;
 
-        scanCanvas.width = w;
-        scanCanvas.height = h;
-        scanContext.drawImage(video, 0, 0, w, h);
+        // 過度に大きい場合は縮小して負荷軽減（例：最大横幅 800）
+        var maxW = 800;
+        var scale = 1;
+        if (w > maxW) {
+          scale = maxW / w;
+        }
+        var dw = Math.floor(w * scale);
+        var dh = Math.floor(h * scale);
+
+        scanCanvas.width = dw;
+        scanCanvas.height = dh;
+        scanContext.drawImage(video, 0, 0, dw, dh);
 
         var dataUrl = scanCanvas.toDataURL("image/png");
 
-        // Quagga を使って 1フレームだけ解析
         Quagga.decodeSingle({
           src: dataUrl,
           numOfWorkers: 0,
+          inputStream: {
+            size: 800,          // 内部スケール指定
+            singleChannel: false
+          },
+          locator: {
+            patchSize: "medium",
+            halfSample: true
+          },
           decoder: {
             readers: ["ean_reader", "ean_13_reader"]
           },
           locate: true
         }, function(result) {
           if (!result || !result.codeResult || !result.codeResult.code) {
+            // 読めない場合は何もしない（ステータスを頻繁に書き換えない）
             return;
           }
           var code = result.codeResult.code;
@@ -355,16 +374,18 @@
     function stopCamera() {
       statusMessage.textContent = "カメラ停止処理を実行します…";
 
-      if (!isCameraRunning && !currentStream) {
+      if (!isCameraRunning && !currentStream && !currentVideoEl) {
         statusMessage.textContent = "カメラはすでに停止しています。";
         return;
       }
 
+      // スキャンループ停止
       if (scanTimerId) {
         clearInterval(scanTimerId);
         scanTimerId = null;
       }
 
+      // MediaStream を停止
       if (currentStream && currentStream.getTracks) {
         try {
           var tracks = currentStream.getTracks();
@@ -375,6 +396,28 @@
           console.warn("currentStream.stop error:", e2);
         }
         currentStream = null;
+      }
+
+      // video 要素の停止・破棄
+      if (currentVideoEl) {
+        try {
+          currentVideoEl.pause();
+        } catch (e3) {}
+        try {
+          if (currentVideoEl.srcObject && currentVideoEl.srcObject.getTracks) {
+            var vTracks = currentVideoEl.srcObject.getTracks();
+            for (var j = 0; j < vTracks.length; j++) {
+              vTracks[j].stop();
+            }
+          }
+        } catch (e4) {}
+        currentVideoEl.srcObject = null;
+
+        var parent = currentVideoEl.parentNode;
+        if (parent) {
+          parent.removeChild(currentVideoEl);
+        }
+        currentVideoEl = null;
       }
 
       var target = document.getElementById("interactive");
