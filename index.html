@@ -2,265 +2,410 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>服薬記録カレンダー</title>
+  <title>蔵書管理アプリ（ISBNバーコード読み取り）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Quagga.js CDN -->
+  <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 </head>
-
-<body class="min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-pink-50 p-4">
-  <div class="w-full max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-7 space-y-7">
-
-    <!-- ヘッダー -->
-    <header class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-800">服薬記録カレンダー</h1>
-        <p class="text-sm text-slate-600 mt-1">
-          朝・昼・晩の服薬を記録して、あとから確認できます。
-        </p>
-      </div>
-
-      <div class="flex gap-2">
-        <button id="prev-month-btn"
-                class="text-sm px-3 py-1.5 rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200 transition">
-          ◀ 前の月
-        </button>
-        <button id="today-btn"
-                class="text-sm px-3 py-1.5 rounded-full bg-emerald-400 text-white shadow hover:bg-emerald-500 transition">
-          今日へ
-        </button>
-        <button id="next-month-btn"
-                class="text-sm px-3 py-1.5 rounded-full bg-sky-100 text-sky-700 hover:bg-sky-200 transition">
-          次の月 ▶
-        </button>
-      </div>
+<body class="bg-slate-100 min-h-screen">
+  <div class="max-w-4xl mx-auto px-4 py-6">
+    <header class="mb-6">
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+        蔵書管理アプリ
+      </h1>
+      <p class="text-sm md:text-base text-slate-600">
+        本のバーコード（ISBN）をカメラで読み取り、書籍情報を登録・管理します。
+      </p>
     </header>
 
-    <!-- カレンダー -->
-    <section class="space-y-3">
-      <div id="month-label" class="text-xl font-semibold text-slate-700"></div>
-
-      <div class="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
-        <div class="grid grid-cols-7 text-center text-sm font-semibold text-slate-600 mb-2">
-          <div>月</div><div>火</div><div>水</div><div>木</div><div>金</div>
-          <div class="text-sky-600">土</div>
-          <div class="text-rose-500">日</div>
+    <!-- カメラ・操作エリア -->
+    <section class="mb-6">
+      <div class="grid md:grid-cols-[280px,1fr] gap-4 items-start">
+        <!-- カメラ表示は小さめ -->
+        <div>
+          <h2 class="text-lg font-semibold text-slate-800 mb-2">カメラ</h2>
+          <div
+            id="interactive"
+            class="w-full h-48 bg-black/80 rounded-lg overflow-hidden relative flex items-center justify-center text-slate-200 text-sm"
+          >
+            カメラ停止中
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              id="startCameraBtn"
+              class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
+            >
+              カメラ起動
+            </button>
+            <button
+              id="stopCameraBtn"
+              class="px-4 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold hover:bg-slate-600 transition"
+            >
+              カメラ停止
+            </button>
+          </div>
+          <p id="statusMessage" class="mt-2 text-xs text-slate-600">
+            カメラを起動してバーコードをかざしてください。
+          </p>
         </div>
 
-        <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+        <!-- 読み取り結果（最新1件の状態） -->
+        <div>
+          <h2 class="text-lg font-semibold text-slate-800 mb-2">読み取り情報</h2>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-2">
+            <div class="flex text-xs text-slate-500 gap-2">
+              <span class="px-2 py-0.5 rounded-full bg-slate-100">
+                最新の読み取り結果
+              </span>
+            </div>
+            <p class="text-sm text-slate-700">
+              ISBN：<span id="lastIsbn" class="font-mono"></span>
+            </p>
+            <p class="text-sm text-slate-700">
+              タイトル：<span id="lastTitle" class="font-medium"></span>
+            </p>
+            <p class="text-sm text-slate-700">
+              著者：<span id="lastAuthors"></span>
+            </p>
+            <p class="text-xs text-slate-500">
+              ※ 同じISBNは登録しません。
+            </p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- 詳細 -->
-    <section class="border-t border-slate-200 pt-4 space-y-4">
-      <div class="flex justify-between items-center">
-        <div id="selected-date-label" class="text-lg font-semibold text-slate-800"></div>
-        <span class="text-xs text-slate-500">チェックすると現在時刻が保存されます</span>
+    <!-- 書籍リスト -->
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-slate-800">
+          登録済みの書籍リスト
+        </h2>
+        <button
+          id="clearAllBtn"
+          class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold hover:bg-rose-50 transition"
+        >
+          すべて削除
+        </button>
       </div>
 
-      <div class="space-y-3">
-
-        <!-- 朝 -->
-        <div class="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-          <div class="flex items-center gap-3">
-            <input id="morning-checkbox" type="checkbox"
-                   class="h-5 w-5 text-amber-500 rounded focus:ring-amber-400">
-            <span class="text-base font-semibold text-amber-800">朝</span>
-          </div>
-          <div id="morning-time-container" class="hidden text-sm text-amber-700">
-            服薬時刻：<span id="morning-time" class="font-mono"></span>
-          </div>
-        </div>
-
-        <!-- 昼 -->
-        <div class="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
-          <div class="flex items-center gap-3">
-            <input id="noon-checkbox" type="checkbox"
-                   class="h-5 w-5 text-emerald-500 rounded focus:ring-emerald-400">
-            <span class="text-base font-semibold text-emerald-800">昼</span>
-          </div>
-          <div id="noon-time-container" class="hidden text-sm text-emerald-700">
-            服薬時刻：<span id="noon-time" class="font-mono"></span>
-          </div>
-        </div>
-
-        <!-- 晩 -->
-        <div class="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3">
-          <div class="flex items-center gap-3">
-            <input id="evening-checkbox" type="checkbox"
-                   class="h-5 w-5 text-indigo-500 rounded focus:ring-indigo-400">
-            <span class="text-base font-semibold text-indigo-800">晩</span>
-          </div>
-          <div id="evening-time-container" class="hidden text-sm text-indigo-700">
-            服薬時刻：<span id="evening-time" class="font-mono"></span>
-          </div>
-        </div>
-
+      <div id="booksList" class="space-y-3">
+        <!-- 書籍カードがここに挿入される -->
       </div>
+
+      <p id="emptyMessage" class="text-sm text-slate-500 mt-3">
+        まだ書籍が登録されていません。バーコードを読み取って登録してください。
+      </p>
     </section>
   </div>
 
   <script>
-    (function () {
-      const STORAGE_KEY = 'medicationTracker_v2_color';
-      const weekdayNames = ['日','月','火','水','木','金','土'];
+    // ======== 定数・状態管理 ========
+    const STORAGE_KEY = "isbnBookList";
 
-      let data = {};
-      let selectedDate;
-      let currentYear, currentMonth;
+    /** @type {{ isbn:string, title:string, authors:string, registeredAt:string }[]} */
+    let books = [];
 
-      const calendarGrid = document.getElementById('calendar-grid');
-      const monthLabel = document.getElementById('month-label');
-      const selectedDateLabel = document.getElementById('selected-date-label');
+    let isCameraRunning = false;
+    let lastScanTime = 0;
+    let lastScanCode = null;
 
-      const morningCheckbox = document.getElementById('morning-checkbox');
-      const noonCheckbox = document.getElementById('noon-checkbox');
-      const eveningCheckbox = document.getElementById('evening-checkbox');
+    // DOM要素
+    const startCameraBtn = document.getElementById("startCameraBtn");
+    const stopCameraBtn = document.getElementById("stopCameraBtn");
+    const statusMessage = document.getElementById("statusMessage");
+    const lastIsbnEl = document.getElementById("lastIsbn");
+    const lastTitleEl = document.getElementById("lastTitle");
+    const lastAuthorsEl = document.getElementById("lastAuthors");
+    const booksListEl = document.getElementById("booksList");
+    const emptyMessageEl = document.getElementById("emptyMessage");
+    const clearAllBtn = document.getElementById("clearAllBtn");
 
-      const morningTimeContainer = document.getElementById('morning-time-container');
-      const noonTimeContainer = document.getElementById('noon-time-container');
-      const eveningTimeContainer = document.getElementById('evening-time-container');
-
-      const morningTime = document.getElementById('morning-time');
-      const noonTime = document.getElementById('noon-time');
-      const eveningTime = document.getElementById('evening-time');
-
-      function pad(n){return n.toString().padStart(2,'0');}
-      function key(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
-
-      function load(){
-        try{ data=JSON.parse(localStorage.getItem(STORAGE_KEY))||{} }catch{ data={}; }
-      }
-      function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(data)); }
-
-      function getDay(k){
-        if(!data[k]) data[k]={morning:{c:false,t:null},noon:{c:false,t:null},evening:{c:false,t:null}};
-        return data[k];
-      }
-
-      function render(){
-        monthLabel.textContent=`${currentYear}年${currentMonth+1}月`;
-        calendarGrid.innerHTML='';
-
-        const first=new Date(currentYear,currentMonth,1);
-        const last=new Date(currentYear,currentMonth+1,0);
-        const offset=(first.getDay()+6)%7;
-
-        for(let i=0;i<offset;i++){
-          const div=document.createElement('div');
-          calendarGrid.appendChild(div);
+    // ======== ローカルストレージ関連 ========
+    function loadBooksFromStorage() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+          books = JSON.parse(data);
+        } else {
+          books = [];
         }
+      } catch (e) {
+        console.error("ローカルストレージ読み込みエラー:", e);
+        books = [];
+      }
+      renderBooks();
+    }
 
-        for(let d=1;d<=last.getDate();d++){
-          const date=new Date(currentYear,currentMonth,d);
-          const k=key(date);
-          const dayData=getDay(k);
+    function saveBooksToStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
+    }
 
-          const cell=document.createElement('div');
-          cell.dataset.date=k;
-          cell.className="rounded-2xl border bg-white min-h-[70px] p-2 cursor-pointer shadow hover:shadow-md transition";
+    // ======== 書籍リスト描画 ========
+    function renderBooks() {
+      booksListEl.innerHTML = "";
 
-          const top=document.createElement('div');
-          top.className="text-sm font-bold";
-          top.textContent=d;
-          cell.appendChild(top);
+      if (books.length === 0) {
+        emptyMessageEl.classList.remove("hidden");
+        return;
+      } else {
+        emptyMessageEl.classList.add("hidden");
+      }
 
-          const row=document.createElement('div');
-          row.className="flex justify-between mt-2";
+      books.forEach((book, index) => {
+        const card = document.createElement("div");
+        card.className =
+          "bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex gap-3 items-start";
 
-          function pill(label,flag,color){
-            const s=document.createElement('span');
-            s.textContent=label;
-            s.className= flag
-              ? `text-${color}-700 font-bold`
-              : 'text-slate-300';
-            return s;
+        const icon = document.createElement("div");
+        icon.className =
+          "w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600";
+        icon.innerHTML =
+          '<span class="text-lg font-bold">📚</span>';
+
+        const content = document.createElement("div");
+        content.className = "flex-1 min-w-0";
+
+        const title = document.createElement("h3");
+        title.className =
+          "text-sm md:text-base font-semibold text-slate-800 truncate";
+        title.textContent = book.title || "タイトル不明";
+
+        const authors = document.createElement("p");
+        authors.className = "text-xs md:text-sm text-slate-600 mt-0.5";
+        authors.textContent = book.authors ? `著者：${book.authors}` : "著者：不明";
+
+        const isbnLine = document.createElement("p");
+        isbnLine.className = "text-xs text-slate-500 mt-0.5 font-mono";
+        isbnLine.textContent = `ISBN：${book.isbn}`;
+
+        const timeLine = document.createElement("p");
+        timeLine.className = "text-xs text-slate-400 mt-0.5";
+        timeLine.textContent = `登録日時：${book.registeredAt}`;
+
+        content.appendChild(title);
+        content.appendChild(authors);
+        content.appendChild(isbnLine);
+        content.appendChild(timeLine);
+
+        const actions = document.createElement("div");
+        actions.className = "flex flex-col items-end gap-2 ml-2";
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className =
+          "px-2.5 py-1 rounded-md bg-rose-50 text-rose-600 text-xs font-semibold border border-rose-200 hover:bg-rose-100 transition";
+        deleteBtn.textContent = "削除";
+        deleteBtn.addEventListener("click", () => {
+          if (confirm("この書籍情報を削除しますか？")) {
+            books.splice(index, 1);
+            saveBooksToStorage();
+            renderBooks();
           }
+        });
 
-          row.appendChild(pill('朝',dayData.morning.c,'amber'));
-          row.appendChild(pill('昼',dayData.noon.c,'emerald'));
-          row.appendChild(pill('晩',dayData.evening.c,'indigo'));
-          cell.appendChild(row);
+        actions.appendChild(deleteBtn);
 
-          cell.onclick=()=>setSelected(date);
-          calendarGrid.appendChild(cell);
+        card.appendChild(icon);
+        card.appendChild(content);
+        card.appendChild(actions);
+
+        booksListEl.appendChild(card);
+      });
+    }
+
+    // ======== 書籍情報取得（Google Books API利用） ========
+    async function fetchBookInfoByIsbn(isbn) {
+      try {
+        const url =
+          "https://www.googleapis.com/books/v1/volumes?q=isbn:" +
+          encodeURIComponent(isbn);
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error("HTTPエラー: " + res.status);
         }
-
-        highlight();
-      }
-
-      function highlight(){
-        const k=key(selectedDate);
-        document.querySelectorAll('#calendar-grid div[data-date]')
-          .forEach(c=>{
-            c.classList.remove('ring-2','ring-emerald-400');
-            if(c.dataset.date===k) c.classList.add('ring-2','ring-emerald-400');
-          });
-      }
-
-      function setSelected(date){
-        selectedDate=new Date(date);
-        const k=key(selectedDate);
-        const dd=getDay(k);
-        selectedDateLabel.textContent=
-          `${selectedDate.getFullYear()}年${selectedDate.getMonth()+1}月${selectedDate.getDate()}日（${weekdayNames[selectedDate.getDay()]}）`;
-
-        function bind(cb,box,time,cont){
-          cb.checked=box.c;
-          if(box.c){ cont.classList.remove('hidden'); time.textContent=box.t; }
-          else{ cont.classList.add('hidden'); time.textContent='';}
+        const data = await res.json();
+        if (!data.items || data.items.length === 0) {
+          return {
+            title: "",
+            authors: "",
+          };
         }
+        const volume = data.items[0].volumeInfo || {};
+        const title = volume.title || "";
+        const authors = Array.isArray(volume.authors)
+          ? volume.authors.join(", ")
+          : "";
 
-        bind(morningCheckbox,dd.morning,morningTime,morningTimeContainer);
-        bind(noonCheckbox,dd.noon,noonTime,noonTimeContainer);
-        bind(eveningCheckbox,dd.evening,eveningTime,eveningTimeContainer);
+        return { title, authors };
+      } catch (e) {
+        console.error("書籍情報の取得に失敗しました:", e);
+        return {
+          title: "",
+          authors: "",
+        };
+      }
+    }
 
-        highlight();
+    // ======== 新規書籍登録 ========
+    async function registerBook(isbn) {
+      // 過去に同じISBNが登録されていないかチェック
+      const existing = books.find((b) => b.isbn === isbn);
+      if (existing) {
+        statusMessage.textContent =
+          "すでに登録済みのISBNです。同じデータは追加しません。";
+        // 最新情報として表示だけ更新
+        lastIsbnEl.textContent = existing.isbn;
+        lastTitleEl.textContent = existing.title || "タイトル不明";
+        lastAuthorsEl.textContent = existing.authors || "不明";
+        return;
       }
 
-      function toggle(kind,cb,time,cont){
-        const k=key(selectedDate);
-        const dd=getDay(k);
-        if(cb.checked){
-          const now=new Date();
-          const t=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
-          dd[kind].c=true; dd[kind].t=t;
-          cont.classList.remove('hidden'); time.textContent=t;
-        }else{
-          dd[kind].c=false; dd[kind].t=null;
-          cont.classList.add('hidden'); time.textContent='';
+      statusMessage.textContent = "書籍情報を取得しています…";
+
+      const info = await fetchBookInfoByIsbn(isbn);
+
+      const now = new Date();
+      const registeredAt =
+        now.getFullYear() +
+        "-" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(now.getDate()).padStart(2, "0") +
+        " " +
+        String(now.getHours()).padStart(2, "0") +
+        ":" +
+        String(now.getMinutes()).padStart(2, "0");
+
+      const newBook = {
+        isbn,
+        title: info.title || "(タイトル不明)",
+        authors: info.authors || "(著者不明)",
+        registeredAt,
+      };
+
+      // 最新を先頭に追加
+      books.unshift(newBook);
+      saveBooksToStorage();
+      renderBooks();
+
+      // 最新読み取り情報に反映
+      lastIsbnEl.textContent = newBook.isbn;
+      lastTitleEl.textContent = newBook.title;
+      lastAuthorsEl.textContent = newBook.authors;
+
+      statusMessage.textContent = "書籍情報を登録しました。";
+    }
+
+    // ======== Quagga（カメラ & バーコード認識） ========
+    function startCamera() {
+      if (isCameraRunning) return;
+
+      const target = document.getElementById("interactive");
+      target.innerHTML = ""; // Quagga用に空にする
+
+      Quagga.init(
+        {
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: target,
+            constraints: {
+              facingMode: "environment", // 背面カメラを優先
+              width: { min: 640 },
+              height: { min: 480 },
+            },
+          },
+          decoder: {
+            // ISBN-13はEAN-13バーコード（先頭978/979）として読める
+            readers: ["ean_reader", "ean_13_reader"],
+          },
+          locate: true,
+        },
+        function (err) {
+          if (err) {
+            console.error(err);
+            statusMessage.textContent =
+              "カメラの初期化に失敗しました。HTTPSでアクセスしているか確認してください。";
+            return;
+          }
+          Quagga.start();
+          isCameraRunning = true;
+          statusMessage.textContent = "カメラ起動中。バーコードをかざしてください。";
         }
-        save(); render();
+      );
+
+      Quagga.onDetected(onBarcodeDetected);
+    }
+
+    function stopCamera() {
+      if (!isCameraRunning) return;
+      Quagga.stop();
+      Quagga.offDetected(onBarcodeDetected);
+      isCameraRunning = false;
+      const target = document.getElementById("interactive");
+      target.innerHTML = "カメラ停止中";
+      statusMessage.textContent = "カメラを停止しました。";
+    }
+
+    async function onBarcodeDetected(result) {
+      if (!result || !result.codeResult || !result.codeResult.code) return;
+
+      const code = result.codeResult.code.trim();
+      const now = Date.now();
+
+      // 連続検出対策: 同じコードを短時間に何度も読んだ場合は無視
+      if (code === lastScanCode && now - lastScanTime < 3000) {
+        return;
+      }
+      lastScanCode = code;
+      lastScanTime = now;
+
+      // ISBN-13として妥当か簡易チェック（13桁、先頭978か979）
+      const cleaned = code.replace(/[^0-9]/g, "");
+      if (cleaned.length !== 13 || !/^97[89]/.test(cleaned)) {
+        statusMessage.textContent =
+          "バーコードを読み取りましたが、ISBN-13ではないようです。";
+        return;
       }
 
-      function init(){
-        load();
-        const today=new Date();
-        currentYear=today.getFullYear();
-        currentMonth=today.getMonth();
-        selectedDate=today;
+      statusMessage.textContent = `ISBN ${cleaned} を読み取りました。登録処理を行います…`;
 
-        render(); setSelected(today);
+      // 書籍登録処理
+      await registerBook(cleaned);
+    }
 
-        document.getElementById('prev-month-btn').onclick=()=>{
-          currentMonth--; if(currentMonth<0){currentMonth=11;currentYear--;}
-          selectedDate=new Date(currentYear,currentMonth,1);
-          render(); setSelected(selectedDate);
-        };
-        document.getElementById('next-month-btn').onclick=()=>{
-          currentMonth++; if(currentMonth>11){currentMonth=0;currentYear++;}
-          selectedDate=new Date(currentYear,currentMonth,1);
-          render(); setSelected(selectedDate);
-        };
-        document.getElementById('today-btn').onclick=()=>{
-          const n=new Date(); currentYear=n.getFullYear(); currentMonth=n.getMonth(); setSelected(n); render();
-        };
+    // ======== イベントハンドラ ========
+    startCameraBtn.addEventListener("click", () => {
+      startCamera();
+    });
 
-        morningCheckbox.onchange=()=>toggle('morning',morningCheckbox,morningTime,morningTimeContainer);
-        noonCheckbox.onchange=()=>toggle('noon',noonCheckbox,noonTime,noonTimeContainer);
-        eveningCheckbox.onchange=()=>toggle('evening',eveningCheckbox,eveningTime,eveningTimeContainer);
+    stopCameraBtn.addEventListener("click", () => {
+      stopCamera();
+    });
+
+    clearAllBtn.addEventListener("click", () => {
+      if (
+        books.length > 0 &&
+        confirm("登録されているすべての書籍情報を削除しますか？")
+      ) {
+        books = [];
+        saveBooksToStorage();
+        renderBooks();
+        lastIsbnEl.textContent = "";
+        lastTitleEl.textContent = "";
+        lastAuthorsEl.textContent = "";
+        statusMessage.textContent = "すべての書籍情報を削除しました。";
       }
-      init();
-    })();
+    });
+
+    // ページ読み込み時にローカルストレージからデータ復元
+    window.addEventListener("DOMContentLoaded", () => {
+      loadBooksFromStorage();
+    });
   </script>
 </body>
 </html>
