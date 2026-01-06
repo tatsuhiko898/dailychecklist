@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>蔵書管理アプリ（ISBNバーコード読み取り）</title>
+  <title>蔵書管理アプリ（バーコード読み取り）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Tailwind -->
@@ -34,7 +34,7 @@
         蔵書管理アプリ
       </h1>
       <p class="text-sm text-slate-600">
-        ISBNバーコードを読み取り、書籍情報を登録します。
+        バーコードを読み取り、書籍情報を登録します。
       </p>
     </header>
 
@@ -69,7 +69,10 @@
           <h2 class="font-semibold mb-2">読み取り情報</h2>
           <div class="bg-white rounded-xl border p-4 space-y-2">
             <p class="text-sm">
-              ISBN：<span id="lastIsbn" class="font-mono"></span>
+              読み取ったコード：<span id="lastRaw" class="font-mono"></span>
+            </p>
+            <p class="text-sm">
+              使用する数値コード：<span id="lastIsbn" class="font-mono"></span>
             </p>
             <p class="text-sm">
               タイトル：<span id="lastTitle"></span>
@@ -78,7 +81,7 @@
               著者：<span id="lastAuthors"></span>
             </p>
             <p class="text-xs text-slate-500">
-              ※ 同じISBNは重複して登録されません。
+              ※ 同じコードは重複して登録されません。
             </p>
           </div>
         </div>
@@ -119,6 +122,7 @@
     var scanTimerId = null;
 
     var statusMessage = document.getElementById("statusMessage");
+    var lastRawEl = document.getElementById("lastRaw");
     var lastIsbnEl = document.getElementById("lastIsbn");
     var lastTitleEl = document.getElementById("lastTitle");
     var lastAuthorsEl = document.getElementById("lastAuthors");
@@ -165,7 +169,7 @@
             '<div class="text-xs md:text-sm text-slate-600">著者：' +
               b.authors +
             '</div>' +
-            '<div class="text-xs text-slate-500 font-mono mt-1">ISBN：' +
+            '<div class="text-xs text-slate-500 font-mono mt-1">コード：' +
               b.isbn +
             '</div>';
 
@@ -211,7 +215,7 @@
     function registerBook(isbn) {
       for (var i = 0; i < books.length; i++) {
         if (books[i].isbn === isbn) {
-          statusMessage.textContent = "すでに登録されているISBNです。";
+          statusMessage.textContent = "このコードはすでに登録されています。";
           lastIsbnEl.textContent = books[i].isbn;
           lastTitleEl.textContent = books[i].title;
           lastAuthorsEl.textContent = books[i].authors;
@@ -320,7 +324,6 @@
         scanCanvas.height = dh;
         scanContext.drawImage(video, 0, 0, dw, dh);
 
-        // 1) BarcodeDetector を優先
         if (barcodeDetector) {
           barcodeDetector.detect(scanCanvas)
             .then(function(barcodes) {
@@ -335,7 +338,6 @@
           return;
         }
 
-        // 2) フォールバック：Quagga
         if (typeof Quagga === "undefined") return;
 
         Quagga.decodeSingle({
@@ -412,7 +414,7 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出共通処理（ここを修正） ======
+    // ====== バーコード検出共通処理（ISBNチェックを完全撤廃） ======
     function onBarcodeDetected(code) {
       var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 2000) {
@@ -421,22 +423,23 @@
       lastScanCode = code;
       lastScanTime = now;
 
-      statusMessage.textContent = "バーコード検出: " + code;
-
       // 数字だけ抽出
-      var cleaned = code.replace(/[^0-9]/g, "");
+      var cleaned = (code || "").replace(/[^0-9]/g, "");
 
-      // ★ 修正ポイント：
-      // 「10桁 or 13桁の数字」なら ISBN として扱う（頭が978/979でなくてもOK）
-      if (!(cleaned.length === 13 || cleaned.length === 10)) {
+      // デバッグ用に生コード＆数値コードを表示
+      lastRawEl.textContent = code + "（長さ " + code.length + "）";
+      lastIsbnEl.textContent = cleaned + "（数字だけ・長さ " + cleaned.length + "）";
+
+      if (!cleaned) {
         statusMessage.textContent =
-          "バーコードは読み取りましたが、ISBNの桁数（10桁または13桁）ではないようです（" +
-          code + "）。";
+          "バーコードは読み取りましたが、数字が含まれていないため登録できません。";
         return;
       }
 
       statusMessage.textContent =
-        "ISBN候補コード " + cleaned + " を検出しました。登録処理を行います…";
+        "バーコード検出：数値コード " + cleaned + " を登録候補として処理します…";
+
+      // ★ ここでは桁数などを一切チェックせず、そのまま「コード」として登録処理へ進める
       registerBook(cleaned);
     }
 
@@ -446,10 +449,11 @@
 
     document.getElementById("clearAllBtn").addEventListener("click", function() {
       if (!books.length) return;
-      if (confirm("すべての書籍情報を削除しますか？")) {
+      if (confirm("すべて削除しますか？")) {
         books = [];
         saveBooks();
         renderBooks();
+        lastRawEl.textContent = "";
         lastIsbnEl.textContent = "";
         lastTitleEl.textContent = "";
         lastAuthorsEl.textContent = "";
