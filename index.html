@@ -125,8 +125,7 @@
     var booksListEl = document.getElementById("booksList");
     var emptyMessageEl = document.getElementById("emptyMessage");
 
-    // ブラウザ標準のバーコード検出器（あれば使う）
-    var barcodeDetector = null;
+    var barcodeDetector = null; // 標準API
 
     // ====== ローカルストレージ ======
     function loadBooks() {
@@ -312,7 +311,6 @@
         var h = video.videoHeight;
         if (!w || !h) return;
 
-        // 解析用に少し縮小
         var maxW = 800;
         var scale = (w > maxW) ? maxW / w : 1;
         var dw = Math.floor(w * scale);
@@ -322,7 +320,7 @@
         scanCanvas.height = dh;
         scanContext.drawImage(video, 0, 0, dw, dh);
 
-        // 1) 端末ネイティブの BarcodeDetector を優先利用
+        // 1) BarcodeDetector を優先
         if (barcodeDetector) {
           barcodeDetector.detect(scanCanvas)
             .then(function(barcodes) {
@@ -334,10 +332,10 @@
             ["catch"](function(err) {
               console.warn("BarcodeDetector error:", err);
             });
-          return; // BarcodeDetector がある場合はここで終了
+          return;
         }
 
-        // 2) BarcodeDetector が無い環境では Quagga にフォールバック
+        // 2) フォールバック：Quagga
         if (typeof Quagga === "undefined") return;
 
         Quagga.decodeSingle({
@@ -362,7 +360,7 @@
           var code = result.codeResult.code;
           onBarcodeDetected(code);
         });
-      }, 500); // 0.5秒ごとに解析
+      }, 500);
     }
 
     // ====== カメラ停止 ======
@@ -414,7 +412,7 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出共通処理 ======
+    // ====== バーコード検出共通処理（ここを修正） ======
     function onBarcodeDetected(code) {
       var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 2000) {
@@ -425,16 +423,20 @@
 
       statusMessage.textContent = "バーコード検出: " + code;
 
+      // 数字だけ抽出
       var cleaned = code.replace(/[^0-9]/g, "");
-      var isbn13 = /^97[89]/;
-      if (cleaned.length !== 13 || !isbn13.test(cleaned)) {
+
+      // ★ 修正ポイント：
+      // 「10桁 or 13桁の数字」なら ISBN として扱う（頭が978/979でなくてもOK）
+      if (!(cleaned.length === 13 || cleaned.length === 10)) {
         statusMessage.textContent =
-          "バーコードは読み取りましたが、ISBN-13ではないようです（" + code + "）。";
+          "バーコードは読み取りましたが、ISBNの桁数（10桁または13桁）ではないようです（" +
+          code + "）。";
         return;
       }
 
       statusMessage.textContent =
-        "ISBN " + cleaned + " を検出しました。登録処理を行います…";
+        "ISBN候補コード " + cleaned + " を検出しました。登録処理を行います…";
       registerBook(cleaned);
     }
 
@@ -459,7 +461,6 @@
     window.addEventListener("DOMContentLoaded", function() {
       loadBooks();
 
-      // BarcodeDetector 対応チェック（Android Chrome は基本 OK なはず）
       if ("BarcodeDetector" in window) {
         try {
           barcodeDetector = new BarcodeDetector({
