@@ -12,19 +12,17 @@
   <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
-    /* ---- カメラ映像調整 ---- */
+    /* カメラ表示領域 */
     #interactive {
       position: relative;
     }
-
     #interactive video,
     #interactive canvas {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover;
     }
-
-    /* Quagga の内部キャンバス（右側が黒く見える原因）を非表示 */
+    /* 右側が黒く見える原因の drawingBuffer を非表示 */
     #interactive .drawingBuffer {
       display: none !important;
     }
@@ -42,31 +40,27 @@
       </p>
     </header>
 
-    <!-- カメラ＆最新情報 -->
+    <!-- カメラ & 最新情報 -->
     <section class="mb-6">
       <div class="grid md:grid-cols-[280px,1fr] gap-4">
         <!-- カメラ -->
         <div>
           <h2 class="font-semibold mb-2">カメラ</h2>
-
           <div id="interactive"
                class="w-full h-48 bg-black/80 rounded-lg overflow-hidden
                       flex items-center justify-center text-slate-200 text-sm">
             カメラ停止中
           </div>
-
           <div class="mt-3 flex gap-2">
             <button id="startCameraBtn"
               class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold">
               カメラ起動
             </button>
-
             <button id="stopCameraBtn"
               class="px-4 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold">
               カメラ停止
             </button>
           </div>
-
           <p id="statusMessage" class="mt-2 text-xs text-slate-600">
             カメラを起動してバーコードをかざしてください。
           </p>
@@ -75,7 +69,6 @@
         <!-- 最新読み取り結果 -->
         <div>
           <h2 class="font-semibold mb-2">読み取り情報</h2>
-
           <div class="bg-white rounded-xl border p-4 space-y-2">
             <p class="text-sm">
               ISBN：<span id="lastIsbn" class="font-mono"></span>
@@ -98,7 +91,6 @@
     <section>
       <div class="flex justify-between mb-3 items-center">
         <h2 class="font-semibold">登録済みの書籍リスト</h2>
-
         <button id="clearAllBtn"
           class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
           すべて削除
@@ -119,10 +111,9 @@
     let books = [];
 
     let isCameraRunning = false;
-    let quaggaInitialized = false;
     let lastScanTime = 0;
     let lastScanCode = null;
-    let activeTrack = null; // Quaggaのカメラトラックを保持
+    let currentStream = null; // video.srcObject を保持
 
     // DOM
     const statusMessage = document.getElementById("statusMessage");
@@ -139,15 +130,15 @@
       } catch {
         books = [];
       }
-      render();
+      renderBooks();
     }
 
     function saveBooks() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
     }
 
-    // ====== レンダリング ======
-    function render() {
+    // ====== 書籍リスト描画 ======
+    function renderBooks() {
       booksListEl.innerHTML = "";
       if (!books.length) {
         emptyMessageEl.classList.remove("hidden");
@@ -156,8 +147,8 @@
       emptyMessageEl.classList.add("hidden");
 
       books.forEach((b, i) => {
-        const div = document.createElement("div");
-        div.className =
+        const item = document.createElement("div");
+        item.className =
           "bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-start gap-4";
 
         const info = document.createElement("div");
@@ -175,13 +166,13 @@
           if (confirm("この書籍を削除しますか？")) {
             books.splice(i, 1);
             saveBooks();
-            render();
+            renderBooks();
           }
         };
 
-        div.appendChild(info);
-        div.appendChild(delBtn);
-        booksListEl.appendChild(div);
+        item.appendChild(info);
+        item.appendChild(delBtn);
+        booksListEl.appendChild(item);
       });
     }
 
@@ -203,9 +194,9 @@
     }
 
     async function registerBook(isbn) {
-      if (books.some(b => b.isbn === isbn)) {
+      const existing = books.find(b => b.isbn === isbn);
+      if (existing) {
         statusMessage.textContent = "すでに登録されているISBNです。";
-        const existing = books.find(b => b.isbn === isbn);
         lastIsbnEl.textContent = existing.isbn;
         lastTitleEl.textContent = existing.title;
         lastAuthorsEl.textContent = existing.authors;
@@ -215,19 +206,23 @@
       statusMessage.textContent = "書籍情報を取得中…";
       const info = await fetchBookByIsbn(isbn);
 
-      const book = { isbn, title: info.title, authors: info.authors };
+      const book = {
+        isbn,
+        title: info.title,
+        authors: info.authors
+      };
+      // 最新を先頭に追加
       books.unshift(book);
       saveBooks();
-      render();
+      renderBooks();
 
       lastIsbnEl.textContent = isbn;
       lastTitleEl.textContent = info.title;
       lastAuthorsEl.textContent = info.authors;
-
       statusMessage.textContent = "登録しました。";
     }
 
-    // ====== Quagga: カメラ起動 ======
+    // ====== カメラ起動 ======
     function startCamera() {
       if (isCameraRunning) {
         statusMessage.textContent = "すでにカメラは起動中です。";
@@ -237,9 +232,9 @@
       const target = document.getElementById("interactive");
       target.innerHTML = "";
 
-      // 念のため、前のイベントを解除
+      // 念のため前回のイベントを解除
       if (Quagga.offDetected) {
-        Quagga.offDetected(onDetected);
+        Quagga.offDetected(onBarcodeDetected);
       }
 
       const config = {
@@ -253,11 +248,126 @@
             height: { min: 480 }
           }
         },
-        locator: {
-          patchSize: "medium",
-          halfSample: true
-        },
-        numOfWorkers: 0,       // ★ Android での安定性重視（ワーカーを使わない）
-        frequency: 10,
         decoder: {
-          readers: ["ean_reader", "ean_13_reader"]  // ISB_]()
+          readers: ["ean_reader", "ean_13_reader"]
+        },
+        locate: true
+      };
+
+      Quagga.init(config, function(err) {
+        if (err) {
+          console.error("Quagga.init error:", err);
+          statusMessage.textContent =
+            "カメラ起動に失敗しました（権限やHTTPSを確認してください）。";
+          return;
+        }
+
+        Quagga.start();
+        isCameraRunning = true;
+        statusMessage.textContent = "バーコードをカメラの中央にかざしてください。";
+
+        // 少し待ってから video.srcObject を取得して保持
+        setTimeout(() => {
+          const video = target.querySelector("video");
+          if (video && video.srcObject instanceof MediaStream) {
+            currentStream = video.srcObject;
+          }
+        }, 500);
+      });
+
+      Quagga.onDetected(onBarcodeDetected);
+    }
+
+    // ====== カメラ停止 ======
+    function stopCamera() {
+      if (!isCameraRunning) {
+        statusMessage.textContent = "カメラはすでに停止しています。";
+        return;
+      }
+
+      try {
+        Quagga.stop();
+      } catch (e) {
+        console.warn("Quagga.stop error:", e);
+      }
+
+      if (Quagga.offDetected) {
+        Quagga.offDetected(onBarcodeDetected);
+      }
+
+      // 保持していた MediaStream を停止
+      if (currentStream) {
+        try {
+          currentStream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+          console.warn("currentStream stop error:", e);
+        }
+        currentStream = null;
+      }
+
+      // 念のため video.srcObject 側も停止
+      const target = document.getElementById("interactive");
+      const video = target.querySelector("video");
+      if (video && video.srcObject) {
+        try {
+          video.srcObject.getTracks().forEach(t => t.stop());
+        } catch (e) {}
+        video.srcObject = null;
+      }
+
+      isCameraRunning = false;
+      target.innerHTML = "カメラ停止中";
+      statusMessage.textContent = "カメラを停止しました。";
+    }
+
+    // ====== バーコード検出 ======
+    async function onBarcodeDetected(result) {
+      const code = result?.codeResult?.code;
+      if (!code) return;
+
+      const now = Date.now();
+      // 同じコードを連続検出したら2秒間は無視
+      if (code === lastScanCode && now - lastScanTime < 2000) {
+        return;
+      }
+      lastScanCode = code;
+      lastScanTime = now;
+
+      const cleaned = code.replace(/\D/g, "");
+
+      // まず「バーコードは読めているか」をステータスで確認できるようにする
+      statusMessage.textContent = `バーコード検出: ${code}`;
+
+      // ISBN-13 判定（13桁 & 先頭 978 or 979）
+      if (cleaned.length !== 13 || !/^97[89]/.test(cleaned)) {
+        statusMessage.textContent =
+          `バーコードは読み取りましたが、ISBN-13ではないようです（${code}）。`;
+        return;
+      }
+
+      statusMessage.textContent =
+        `ISBN ${cleaned} を検出しました。登録処理を行います…`;
+      await registerBook(cleaned);
+    }
+
+    // ====== イベント登録 ======
+    document.getElementById("startCameraBtn").addEventListener("click", startCamera);
+    document.getElementById("stopCameraBtn").addEventListener("click", stopCamera);
+
+    document.getElementById("clearAllBtn").addEventListener("click", () => {
+      if (!books.length) return;
+      if (confirm("すべての書籍情報を削除しますか？")) {
+        books = [];
+        saveBooks();
+        renderBooks();
+        lastIsbnEl.textContent = "";
+        lastTitleEl.textContent = "";
+        lastAuthorsEl.textContent = "";
+        statusMessage.textContent = "すべて削除しました。";
+      }
+    });
+
+    window.addEventListener("DOMContentLoaded", loadBooks);
+  </script>
+</body>
+</html>
