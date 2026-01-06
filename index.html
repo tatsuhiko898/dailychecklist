@@ -8,7 +8,7 @@
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Quagga -->
+  <!-- Quagga（フォールバック用） -->
   <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
@@ -41,6 +41,7 @@
     <!-- カメラ & 最新情報 -->
     <section class="mb-6">
       <div class="grid md:grid-cols-[280px,1fr] gap-4">
+        <!-- カメラ -->
         <div>
           <h2 class="font-semibold mb-2">カメラ</h2>
           <div id="interactive"
@@ -59,10 +60,11 @@
             </button>
           </div>
           <p id="statusMessage" class="mt-2 text-xs text-slate-600">
-            準備完了：カメラ起動ボタンを押してください。（HTTPS または localhost で開いてください）
+            準備完了：カメラ起動ボタンを押してください。（必ず HTTPS または localhost で開いてください）
           </p>
         </div>
 
+        <!-- 最新読み取り結果 -->
         <div>
           <h2 class="font-semibold mb-2">読み取り情報</h2>
           <div class="bg-white rounded-xl border p-4 space-y-2">
@@ -123,6 +125,9 @@
     var booksListEl = document.getElementById("booksList");
     var emptyMessageEl = document.getElementById("emptyMessage");
 
+    // ブラウザ標準のバーコード検出器（あれば使う）
+    var barcodeDetector = null;
+
     // ====== ローカルストレージ ======
     function loadBooks() {
       try {
@@ -138,7 +143,6 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
     }
 
-    // ====== リスト描画 ======
     function renderBooks() {
       booksListEl.innerHTML = "";
       if (!books.length) {
@@ -243,11 +247,6 @@
         statusMessage.textContent = "すでにカメラは起動中です。";
         return;
       }
-      if (typeof Quagga === "undefined") {
-        statusMessage.textContent =
-          "Quagga.js が読み込めていません。ネットワーク接続を確認してください。";
-        return;
-      }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         statusMessage.textContent =
           "このブラウザは getUserMedia に対応していません。";
@@ -295,7 +294,7 @@
         });
     }
 
-    // ====== スキャンループ（ここを重点修正：canvas を直接 Quagga に渡す） ======
+    // ====== スキャンループ ======
     function startScanningLoop(video) {
       if (!scanCanvas) {
         scanCanvas = document.createElement("canvas");
@@ -313,11 +312,9 @@
         var h = video.videoHeight;
         if (!w || !h) return;
 
+        // 解析用に少し縮小
         var maxW = 800;
-        var scale = 1;
-        if (w > maxW) {
-          scale = maxW / w;
-        }
+        var scale = (w > maxW) ? maxW / w : 1;
         var dw = Math.floor(w * scale);
         var dh = Math.floor(h * scale);
 
@@ -325,13 +322,30 @@
         scanCanvas.height = dh;
         scanContext.drawImage(video, 0, 0, dw, dh);
 
-        // ★ canvas 要素そのものを src に渡す
+        // 1) 端末ネイティブの BarcodeDetector を優先利用
+        if (barcodeDetector) {
+          barcodeDetector.detect(scanCanvas)
+            .then(function(barcodes) {
+              if (!barcodes || !barcodes.length) return;
+              var raw = barcodes[0].rawValue || "";
+              if (!raw) return;
+              onBarcodeDetected(String(raw));
+            })
+            ["catch"](function(err) {
+              console.warn("BarcodeDetector error:", err);
+            });
+          return; // BarcodeDetector がある場合はここで終了
+        }
+
+        // 2) BarcodeDetector が無い環境では Quagga にフォールバック
+        if (typeof Quagga === "undefined") return;
+
         Quagga.decodeSingle({
           src: scanCanvas,
           numOfWorkers: 0,
           inputStream: {
             size: 640,
-            singleChannel: true  // グレースケールとして扱う
+            singleChannel: true
           },
           locator: {
             patchSize: "medium",
@@ -348,7 +362,7 @@
           var code = result.codeResult.code;
           onBarcodeDetected(code);
         });
-      }, 700);
+      }, 500); // 0.5秒ごとに解析
     }
 
     // ====== カメラ停止 ======
@@ -400,7 +414,7 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出処理 ======
+    // ====== バーコード検出共通処理 ======
     function onBarcodeDetected(code) {
       var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 2000) {
@@ -441,10 +455,27 @@
       }
     });
 
+    // ====== 初期化 ======
     window.addEventListener("DOMContentLoaded", function() {
       loadBooks();
-      statusMessage.textContent =
-        "準備完了：カメラ起動ボタンを押してください。（必ず HTTPS または localhost で開いてください）";
+
+      // BarcodeDetector 対応チェック（Android Chrome は基本 OK なはず）
+      if ("BarcodeDetector" in window) {
+        try {
+          barcodeDetector = new BarcodeDetector({
+            formats: ["ean_13", "ean_8", "code_128", "upc_a", "upc_e"]
+          });
+          statusMessage.textContent =
+            "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector 対応）";
+        } catch (e) {
+          barcodeDetector = null;
+          statusMessage.textContent =
+            "準備完了：カメラ起動ボタンを押してください。（フォールバック: Quagga）";
+        }
+      } else {
+        statusMessage.textContent =
+          "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector なし／Quagga使用）";
+      }
     });
   </script>
 </body>
