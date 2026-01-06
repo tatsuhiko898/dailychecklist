@@ -4,234 +4,49 @@
 <meta charset="UTF-8" />
 <title>服薬記録アプリ（月曜日はじまり）</title>
 <style>
-/* …（前回と同じCSS。省略せず使えます）… */
-
-/* 日曜・土曜の色（見やすくするだけ） */
-.weekday-header-sun,
-.weekday-sun { color:#d9534f; }
-.weekday-header-sat,
-.weekday-sat { color:#337ab7; }
-</style>
-</head>
-<body>
-<div class="app-container">
-<header><h1>服薬記録アプリ（朝・昼・晩）</h1></header>
-
-<section class="card">
-  <div class="calendar-header">
-    <button id="prevMonth" class="calendar-nav-btn">◀ 前の月</button>
-    <div id="monthLabel" class="calendar-header-title"></div>
-    <button id="nextMonth" class="calendar-nav-btn">次の月 ▶</button>
-  </div>
-
-  <table class="calendar">
-    <thead>
-      <tr>
-        <th>月</th>
-        <th>火</th>
-        <th>水</th>
-        <th>木</th>
-        <th>金</th>
-        <th class="weekday-header-sat">土</th>
-        <th class="weekday-header-sun">日</th>
-      </tr>
-    </thead>
-    <tbody id="calendarBody"></tbody>
-  </table>
-</section>
-
-<section class="card">
-  <div class="detail-title">服薬状況の詳細</div>
-  <div id="selectedDateLabel" class="selected-date-label"></div>
-
-  <div class="check-rows">
-    <div class="check-row">
-      <div class="check-row-left">
-        <input type="checkbox" class="med-check" data-slot="morning">
-        <span class="check-label" data-slot="morning">朝</span>
-      </div>
-      <span id="time-morning" class="time-label"></span>
-    </div>
-
-    <div class="check-row">
-      <div class="check-row-left">
-        <input type="checkbox" class="med-check" data-slot="noon">
-        <span class="check-label" data-slot="noon">昼</span>
-      </div>
-      <span id="time-noon" class="time-label"></span>
-    </div>
-
-    <div class="check-row">
-      <div class="check-row-left">
-        <input type="checkbox" class="med-check" data-slot="night">
-        <span class="check-label" data-slot="night">晩</span>
-      </div>
-      <span id="time-night" class="time-label"></span>
-    </div>
-  </div>
-</section>
-</div>
-
-<script>
-const STORAGE_KEY = "medicationRecords";
-const WEEKDAYS = ["日","月","火","水","木","金","土"];
-const SLOT_KEYS = ["morning","noon","night"];
-const SLOT_LABELS = {morning:"朝", noon:"昼", night:"晩"};
-
-let currentMonthDate;
-let selectedDateKey;
-let records = {};
-
-function padZero(n){return n.toString().padStart(2,"0");}
-function formatDateKey(d){return `${d.getFullYear()}-${padZero(d.getMonth()+1)}-${padZero(d.getDate())}`;}
-function parseDateKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d);}
-function formatTime(d){return `${padZero(d.getHours())}:${padZero(d.getMinutes())}`;}
-function defaultRecord(){return{morning:{taken:false,time:null},noon:{taken:false,time:null},night:{taken:false,time:null}};}
-
-function loadRecords(){try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):{};}catch{return {};}}
-function saveRecords(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}catch{}}
-
-function renderCalendar(){
-  const body=document.getElementById("calendarBody");
-  body.innerHTML="";
-
-  const year=currentMonthDate.getFullYear();
-  const month=currentMonthDate.getMonth();
-  document.getElementById("monthLabel").textContent=`${year}年${month+1}月`;
-
-  const firstDay=new Date(year,month,1);
-  const firstDayOfWeek=((firstDay.getDay()+6)%7); // 月曜基準
-  const daysInMonth=new Date(year,month+1,0).getDate();
-
-  let day=1;
-  for(let r=0;r<6;r++){
-    const tr=document.createElement("tr");
-    for(let c=0;c<7;c++){
-      const td=document.createElement("td");
-
-      if((r===0 && c<firstDayOfWeek) || day>daysInMonth){
-        td.innerHTML="";
-      }else{
-        const date=new Date(year,month,day);
-        const key=formatDateKey(date);
-
-        const cell=document.createElement("div");
-        cell.className="calendar-day calendar-day-inner";
-        cell.dataset.date=key;
-
-        const num=document.createElement("div");
-        num.className="date-number";
-        num.textContent=day;
-
-        // 土曜（列5）、日曜（列6）
-        if(c===5) num.classList.add("weekday-sat");
-        if(c===6) num.classList.add("weekday-sun");
-
-        const status=document.createElement("div");
-        status.className="status-labels";
-        SLOT_KEYS.forEach(k=>{
-          const s=document.createElement("span");
-          s.className="slot-label";
-          s.dataset.slot=k;
-          s.textContent=SLOT_LABELS[k];
-          status.appendChild(s);
-        });
-
-        cell.appendChild(num);
-        cell.appendChild(status);
-        td.appendChild(cell);
-
-        const todayKey=formatDateKey(new Date());
-        if(key===todayKey) cell.classList.add("today-outline");
-
-        applyCalendarDayStyles(key,cell);
-        cell.addEventListener("click",()=>{
-          selectedDateKey=key;
-          updateDetailPanel();
-          updateSelectedCalendarCell();
-        });
-
-        day++;
-      }
-      tr.appendChild(td);
-    }
-    body.appendChild(tr);
-  }
-  updateSelectedCalendarCell();
+:root {
+  --accent:#007bff;
+  --bg:#f5f5f5;
+  --card-bg:#ffffff;
+  --border:#dddddd;
+  --text-main:#333333;
+  --text-muted:#aaaaaa;
 }
-
-function applyCalendarDayStyles(key,cell){
-  const rec=records[key];
-  cell.querySelectorAll(".slot-label").forEach(span=>{
-    const slot=span.dataset.slot;
-    span.classList.toggle("taken",rec && rec[slot]?.taken);
-  });
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--bg);
+  color:var(--text-main);
 }
-
-function updateSelectedCalendarCell(){
-  document.querySelectorAll(".calendar-day").forEach(c=>c.classList.remove("selected"));
-  const sel=document.querySelector(`.calendar-day[data-date="${selectedDateKey}"]`);
-  if(sel) sel.classList.add("selected");
+.app-container{max-width:900px;margin:16px auto;padding:16px;}
+.card{
+  background:#fff;border-radius:12px;padding:16px;
+  box-shadow:0 2px 6px rgba(0,0,0,.06);margin-bottom:14px;
 }
+h1{text-align:center;font-size:1.3rem}
 
-function updateDetailPanel(){
-  const d=parseDateKey(selectedDateKey);
-  document.getElementById("selectedDateLabel").textContent=
-    `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
-
-  const rec=records[selectedDateKey]||defaultRecord();
-  SLOT_KEYS.forEach(k=>{
-    const cb=document.querySelector(`.med-check[data-slot="${k}"]`);
-    const label=document.querySelector(`.check-label[data-slot="${k}"]`);
-    const ts=document.getElementById(`time-${k}`);
-    cb.checked=!!rec[k].taken;
-    label.classList.toggle("taken",!!rec[k].taken);
-    ts.textContent=rec[k].taken?`服薬時刻：${rec[k].time}`:"";
-  });
+/* カレンダー */
+.calendar-header{
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:6px
 }
-
-function onCheckboxChange(e){
-  const slot=e.target.dataset.slot;
-  let rec=records[selectedDateKey]||(records[selectedDateKey]=defaultRecord());
-  const label=document.querySelector(`.check-label[data-slot="${slot}"]`);
-  const ts=document.getElementById(`time-${slot}`);
-
-  if(e.target.checked){
-    const t=formatTime(new Date());
-    rec[slot]={taken:true,time:t};
-    label.classList.add("taken");
-    ts.textContent=`服薬時刻：${t}`;
-  }else{
-    rec[slot]={taken:false,time:null};
-    label.classList.remove("taken");
-    ts.textContent="";
-  }
-  saveRecords();
-
-  const cell=document.querySelector(`.calendar-day[data-date="${selectedDateKey}"]`);
-  if(cell) applyCalendarDayStyles(selectedDateKey,cell);
+.calendar-nav-btn{
+  border:1px solid var(--border);background:#fff;
+  padding:4px 10px;border-radius:8px;cursor:pointer
 }
-
-document.addEventListener("DOMContentLoaded",()=>{
-  const today=new Date();
-  currentMonthDate=new Date(today.getFullYear(),today.getMonth(),1);
-  selectedDateKey=formatDateKey(today);
-  records=loadRecords();
-
-  renderCalendar();
-  updateDetailPanel();
-
-  document.getElementById("prevMonth").onclick=()=>{
-    currentMonthDate.setMonth(currentMonthDate.getMonth()-1);
-    renderCalendar();
-  };
-  document.getElementById("nextMonth").onclick=()=>{
-    currentMonthDate.setMonth(currentMonthDate.getMonth()+1);
-    renderCalendar();
-  };
-
-  document.querySelectorAll(".med-check").forEach(cb=>cb.addEventListener("change",onCheckboxChange));
-});
-</script>
-</body>
-</html>
+.calendar-header-title{font-weight:bold}
+table.calendar{
+  width:100%;border-collapse:collapse;table-layout:fixed;
+  margin-left:auto;margin-right:auto; /* 中央配置 */
+}
+.calendar thead th{
+  padding:4px 0;border-bottom:1px solid var(--border);font-size:.8rem
+}
+.calendar tbody td{
+  border:1px solid var(--border);
+  height:74px;padding:4px;cursor:pointer;text-align:center; /* 中央寄せ */
+}
+.calendar-day{display:flex;flex-direction:column;gap:2px}
+.calendar-day-inner{align-items:center;} /* 中央に整列 */
+.date-number{font-size:.85rem;font-weight:600}
+.slot-label{font-size:.
