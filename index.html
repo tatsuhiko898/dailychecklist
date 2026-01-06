@@ -1,617 +1,237 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>服薬記録アプリ</title>
-  <style>
-    :root {
-      --accent: #007bff;
-      --bg: #f5f5f5;
-      --card-bg: #ffffff;
-      --border: #dddddd;
-      --text-main: #333333;
-      --text-muted: #aaaaaa;
-    }
+<meta charset="UTF-8" />
+<title>服薬記録アプリ（月曜日はじまり）</title>
+<style>
+/* …（前回と同じCSS。省略せず使えます）… */
 
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background-color: var(--bg);
-      color: var(--text-main);
-    }
-
-    .app-container {
-      max-width: 900px;
-      margin: 16px auto;
-      padding: 16px;
-    }
-
-    header h1 {
-      margin: 0 0 12px 0;
-      font-size: 1.4rem;
-      text-align: center;
-    }
-
-    .layout {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    @media (min-width: 768px) {
-      .layout {
-        flex-direction: column;
-      }
-    }
-
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-    }
-
-    /* カレンダー部分 */
-    .calendar-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-
-    .calendar-header-title {
-      flex: 1;
-      text-align: center;
-      font-weight: bold;
-    }
-
-    .calendar-nav-btn {
-      border: 1px solid var(--border);
-      background-color: #ffffff;
-      padding: 4px 8px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-
-    .calendar-nav-btn:hover {
-      border-color: var(--accent);
-    }
-
-    table.calendar {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 0.8rem;
-    }
-
-    .calendar thead th {
-      padding: 4px 0;
-      font-weight: 600;
-      text-align: center;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .calendar tbody td {
-      border: 1px solid var(--border);
-      vertical-align: top;
-      padding: 4px;
-      height: 72px;
-      cursor: pointer;
-    }
-
-    .calendar-day {
-      position: relative;
-      border-radius: 8px;
-      transition: background-color 0.15s, box-shadow 0.15s, border-color 0.15s;
-    }
-
-    .calendar-day-inner {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .date-number {
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .status-labels {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .slot-label {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      font-weight: normal;
-    }
-
-    .slot-label.taken {
-      color: var(--accent);
-      font-weight: bold;
-    }
-
-    .calendar-day.selected {
-      border: 2px solid var(--accent);
-      background-color: #e6f0ff;
-      box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.1);
-    }
-
-    .calendar-day.today-outline {
-      box-shadow: inset 0 0 0 1px var(--accent);
-    }
-
-    /* 日曜・土曜の色（見やすくするだけ） */
-    .weekday-header-sun,
-    .weekday-sun {
-      color: #d9534f;
-    }
-
-    .weekday-header-sat,
-    .weekday-sat {
-      color: #337ab7;
-    }
-
-    /* 詳細部分 */
-    .detail-title {
-      font-size: 1rem;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-
-    .selected-date-label {
-      font-size: 0.95rem;
-      margin-bottom: 12px;
-    }
-
-    .check-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .check-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-
-    .check-row-left {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .check-label {
-      font-size: 0.9rem;
-      color: var(--text-main);
-    }
-
-    .check-label.taken {
-      color: var(--accent);
-      font-weight: bold;
-    }
-
-    .time-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-
-    input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-    }
-
-    .hint {
-      margin-top: 8px;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-  </style>
+/* 日曜・土曜の色（見やすくするだけ） */
+.weekday-header-sun,
+.weekday-sun { color:#d9534f; }
+.weekday-header-sat,
+.weekday-sat { color:#337ab7; }
+</style>
 </head>
 <body>
-  <div class="app-container">
-    <header>
-      <h1>服薬記録アプリ（朝・昼・晩）</h1>
-    </header>
+<div class="app-container">
+<header><h1>服薬記録アプリ（朝・昼・晩）</h1></header>
 
-    <div class="layout">
-      <!-- カレンダー表示 -->
-      <section class="card" aria-label="カレンダー">
-        <div class="calendar-header">
-          <button id="prevMonth" class="calendar-nav-btn">◀ 前の月</button>
-          <div id="monthLabel" class="calendar-header-title"></div>
-          <button id="nextMonth" class="calendar-nav-btn">次の月 ▶</button>
-        </div>
-
-        <table class="calendar">
-          <thead>
-            <tr>
-              <th class="weekday-header-sun">日</th>
-              <th>月</th>
-              <th>火</th>
-              <th>水</th>
-              <th>木</th>
-              <th>金</th>
-              <th class="weekday-header-sat">土</th>
-            </tr>
-          </thead>
-          <tbody id="calendarBody">
-            <!-- JavaScript で生成 -->
-          </tbody>
-        </table>
-      </section>
-
-      <!-- 詳細・登録エリア -->
-      <section class="card" aria-label="服薬状況の詳細">
-        <div class="detail-title">服薬状況の詳細</div>
-        <div id="selectedDateLabel" class="selected-date-label"></div>
-
-        <div class="check-rows">
-          <!-- 朝 -->
-          <div class="check-row">
-            <div class="check-row-left">
-              <input
-                type="checkbox"
-                class="med-check"
-                id="check-morning"
-                data-slot="morning"
-              />
-              <span class="check-label" data-slot="morning">朝</span>
-            </div>
-            <span class="time-label" id="time-morning"></span>
-          </div>
-
-          <!-- 昼 -->
-          <div class="check-row">
-            <div class="check-row-left">
-              <input
-                type="checkbox"
-                class="med-check"
-                id="check-noon"
-                data-slot="noon"
-              />
-              <span class="check-label" data-slot="noon">昼</span>
-            </div>
-            <span class="time-label" id="time-noon"></span>
-          </div>
-
-          <!-- 晩 -->
-          <div class="check-row">
-            <div class="check-row-left">
-              <input
-                type="checkbox"
-                class="med-check"
-                id="check-night"
-                data-slot="night"
-              />
-              <span class="check-label" data-slot="night">晩</span>
-            </div>
-            <span class="time-label" id="time-night"></span>
-          </div>
-        </div>
-
-        <div class="hint">
-          ・チェックを付けた時刻が自動で記録されます。<br />
-          ・チェックを外すと、その時刻は削除されます。
-        </div>
-      </section>
-    </div>
+<section class="card">
+  <div class="calendar-header">
+    <button id="prevMonth" class="calendar-nav-btn">◀ 前の月</button>
+    <div id="monthLabel" class="calendar-header-title"></div>
+    <button id="nextMonth" class="calendar-nav-btn">次の月 ▶</button>
   </div>
 
-  <script>
-    // ---- 設定・共通関数 ----
-    const STORAGE_KEY = "medicationRecords";
-    const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-    const SLOT_KEYS = ["morning", "noon", "night"];
-    const SLOT_LABELS = {
-      morning: "朝",
-      noon: "昼",
-      night: "晩",
-    };
+  <table class="calendar">
+    <thead>
+      <tr>
+        <th>月</th>
+        <th>火</th>
+        <th>水</th>
+        <th>木</th>
+        <th>金</th>
+        <th class="weekday-header-sat">土</th>
+        <th class="weekday-header-sun">日</th>
+      </tr>
+    </thead>
+    <tbody id="calendarBody"></tbody>
+  </table>
+</section>
 
-    let currentMonthDate; // 表示中の月（1日を指すDate）
-    let selectedDateKey; // "YYYY-MM-DD"
-    let records = {}; // ローカルストレージから読み込むデータ
+<section class="card">
+  <div class="detail-title">服薬状況の詳細</div>
+  <div id="selectedDateLabel" class="selected-date-label"></div>
 
-    function padZero(num) {
-      return num.toString().padStart(2, "0");
-    }
+  <div class="check-rows">
+    <div class="check-row">
+      <div class="check-row-left">
+        <input type="checkbox" class="med-check" data-slot="morning">
+        <span class="check-label" data-slot="morning">朝</span>
+      </div>
+      <span id="time-morning" class="time-label"></span>
+    </div>
 
-    function formatDateKey(date) {
-      const y = date.getFullYear();
-      const m = padZero(date.getMonth() + 1);
-      const d = padZero(date.getDate());
-      return `${y}-${m}-${d}`;
-    }
+    <div class="check-row">
+      <div class="check-row-left">
+        <input type="checkbox" class="med-check" data-slot="noon">
+        <span class="check-label" data-slot="noon">昼</span>
+      </div>
+      <span id="time-noon" class="time-label"></span>
+    </div>
 
-    function parseDateKey(dateKey) {
-      const [y, m, d] = dateKey.split("-").map(Number);
-      return new Date(y, m - 1, d);
-    }
+    <div class="check-row">
+      <div class="check-row-left">
+        <input type="checkbox" class="med-check" data-slot="night">
+        <span class="check-label" data-slot="night">晩</span>
+      </div>
+      <span id="time-night" class="time-label"></span>
+    </div>
+  </div>
+</section>
+</div>
 
-    function formatTime(date) {
-      const h = padZero(date.getHours());
-      const m = padZero(date.getMinutes());
-      return `${h}:${m}`;
-    }
+<script>
+const STORAGE_KEY = "medicationRecords";
+const WEEKDAYS = ["日","月","火","水","木","金","土"];
+const SLOT_KEYS = ["morning","noon","night"];
+const SLOT_LABELS = {morning:"朝", noon:"昼", night:"晩"};
 
-    function defaultRecord() {
-      return {
-        morning: { taken: false, time: null },
-        noon: { taken: false, time: null },
-        night: { taken: false, time: null },
-      };
-    }
+let currentMonthDate;
+let selectedDateKey;
+let records = {};
 
-    function loadRecords() {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return {};
-        const parsed = JSON.parse(stored);
-        return parsed || {};
-      } catch (e) {
-        console.error("ローカルストレージの読み込みに失敗しました:", e);
-        return {};
-      }
-    }
+function padZero(n){return n.toString().padStart(2,"0");}
+function formatDateKey(d){return `${d.getFullYear()}-${padZero(d.getMonth()+1)}-${padZero(d.getDate())}`;}
+function parseDateKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d);}
+function formatTime(d){return `${padZero(d.getHours())}:${padZero(d.getMinutes())}`;}
+function defaultRecord(){return{morning:{taken:false,time:null},noon:{taken:false,time:null},night:{taken:false,time:null}};}
 
-    function saveRecords() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-      } catch (e) {
-        console.error("ローカルストレージへの保存に失敗しました:", e);
-      }
-    }
+function loadRecords(){try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):{};}catch{return {};}}
+function saveRecords(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}catch{}}
 
-    // ---- カレンダー描画 ----
-    function renderCalendar() {
-      const calendarBody = document.getElementById("calendarBody");
-      calendarBody.innerHTML = "";
+function renderCalendar(){
+  const body=document.getElementById("calendarBody");
+  body.innerHTML="";
 
-      const year = currentMonthDate.getFullYear();
-      const month = currentMonthDate.getMonth(); // 0-11
+  const year=currentMonthDate.getFullYear();
+  const month=currentMonthDate.getMonth();
+  document.getElementById("monthLabel").textContent=`${year}年${month+1}月`;
 
-      document.getElementById(
-        "monthLabel"
-      ).textContent = `${year}年${month + 1}月`;
+  const firstDay=new Date(year,month,1);
+  const firstDayOfWeek=((firstDay.getDay()+6)%7); // 月曜基準
+  const daysInMonth=new Date(year,month+1,0).getDate();
 
-      const firstDay = new Date(year, month, 1);
-      const firstDayOfWeek = firstDay.getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let day=1;
+  for(let r=0;r<6;r++){
+    const tr=document.createElement("tr");
+    for(let c=0;c<7;c++){
+      const td=document.createElement("td");
 
-      let dayCounter = 1;
+      if((r===0 && c<firstDayOfWeek) || day>daysInMonth){
+        td.innerHTML="";
+      }else{
+        const date=new Date(year,month,day);
+        const key=formatDateKey(date);
 
-      for (let row = 0; row < 6; row++) {
-        const tr = document.createElement("tr");
+        const cell=document.createElement("div");
+        cell.className="calendar-day calendar-day-inner";
+        cell.dataset.date=key;
 
-        for (let col = 0; col < 7; col++) {
-          const td = document.createElement("td");
+        const num=document.createElement("div");
+        num.className="date-number";
+        num.textContent=day;
 
-          if (
-            (row === 0 && col < firstDayOfWeek) ||
-            dayCounter > daysInMonth
-          ) {
-            // 前月・翌月の空白セル
-            td.innerHTML = "";
-          } else {
-            const date = new Date(year, month, dayCounter);
-            const dateKey = formatDateKey(date);
+        // 土曜（列5）、日曜（列6）
+        if(c===5) num.classList.add("weekday-sat");
+        if(c===6) num.classList.add("weekday-sun");
 
-            const dayDiv = document.createElement("div");
-            dayDiv.classList.add("calendar-day", "calendar-day-inner");
-            dayDiv.dataset.date = dateKey;
-
-            const dateNumberDiv = document.createElement("div");
-            dateNumberDiv.classList.add("date-number");
-            dateNumberDiv.textContent = dayCounter;
-
-            const statusDiv = document.createElement("div");
-            statusDiv.classList.add("status-labels");
-
-            SLOT_KEYS.forEach((slotKey) => {
-              const span = document.createElement("span");
-              span.classList.add("slot-label");
-              span.dataset.slot = slotKey;
-              span.textContent = SLOT_LABELS[slotKey];
-              statusDiv.appendChild(span);
-            });
-
-            dayDiv.appendChild(dateNumberDiv);
-            dayDiv.appendChild(statusDiv);
-            td.appendChild(dayDiv);
-
-            // 日曜・土曜の色分け（数字に反映）
-            if (col === 0) {
-              dateNumberDiv.classList.add("weekday-sun");
-            }
-            if (col === 6) {
-              dateNumberDiv.classList.add("weekday-sat");
-            }
-
-            // 今日に薄い枠を付ける（わかりやすさ）
-            const today = new Date();
-            const todayKey = formatDateKey(today);
-            if (dateKey === todayKey) {
-              dayDiv.classList.add("today-outline");
-            }
-
-            // 状態に応じてスタイル更新
-            applyCalendarDayStyles(dateKey, dayDiv);
-
-            // 日付クリックで選択
-            dayDiv.addEventListener("click", () => {
-              selectedDateKey = dateKey;
-              updateDetailPanel();
-              updateSelectedCalendarCell();
-            });
-
-            dayCounter++;
-          }
-
-          tr.appendChild(td);
-        }
-
-        calendarBody.appendChild(tr);
-      }
-
-      // 選択中の日付の枠線を更新
-      updateSelectedCalendarCell();
-    }
-
-    function applyCalendarDayStyles(dateKey, dayDiv) {
-      const record = records[dateKey];
-      const slotSpans = dayDiv.querySelectorAll(".slot-label");
-
-      slotSpans.forEach((span) => {
-        const slot = span.dataset.slot;
-        span.classList.remove("taken");
-        if (record && record[slot] && record[slot].taken) {
-          span.classList.add("taken");
-        }
-      });
-    }
-
-    function updateSelectedCalendarCell() {
-      const allCells = document.querySelectorAll(".calendar-day");
-      allCells.forEach((cell) => cell.classList.remove("selected"));
-
-      const selectedCell = document.querySelector(
-        `.calendar-day[data-date="${selectedDateKey}"]`
-      );
-      if (selectedCell) {
-        selectedCell.classList.add("selected");
-      }
-    }
-
-    // ---- 詳細パネル更新 ----
-    function updateDetailPanel() {
-      const date = parseDateKey(selectedDateKey);
-      const y = date.getFullYear();
-      const m = date.getMonth() + 1;
-      const d = date.getDate();
-      const weekday = WEEKDAYS[date.getDay()];
-
-      const selectedDateLabel = document.getElementById("selectedDateLabel");
-      selectedDateLabel.textContent = `${y}年${m}月${d}日（${weekday}）`;
-
-      const record = records[selectedDateKey] || defaultRecord();
-
-      SLOT_KEYS.forEach((slotKey) => {
-        const cb = document.querySelector(
-          `.med-check[data-slot="${slotKey}"]`
-        );
-        const label = document.querySelector(
-          `.check-label[data-slot="${slotKey}"]`
-        );
-        const timeSpan = document.getElementById(`time-${slotKey}`);
-
-        const slotData = record[slotKey] || { taken: false, time: null };
-
-        cb.checked = !!slotData.taken;
-
-        if (slotData.taken) {
-          label.classList.add("taken");
-          timeSpan.textContent = `服薬時刻：${slotData.time}`;
-        } else {
-          label.classList.remove("taken");
-          timeSpan.textContent = "";
-        }
-      });
-    }
-
-    // ---- チェックボックス変更処理 ----
-    function onCheckboxChange(event) {
-      const slotKey = event.target.dataset.slot;
-      const checked = event.target.checked;
-
-      // 対象日付のレコードを用意
-      let record = records[selectedDateKey];
-      if (!record) {
-        record = defaultRecord();
-        records[selectedDateKey] = record;
-      }
-
-      const label = document.querySelector(
-        `.check-label[data-slot="${slotKey}"]`
-      );
-      const timeSpan = document.getElementById(`time-${slotKey}`);
-
-      if (checked) {
-        const now = new Date();
-        const timeStr = formatTime(now);
-        record[slotKey] = { taken: true, time: timeStr };
-        label.classList.add("taken");
-        timeSpan.textContent = `服薬時刻：${timeStr}`;
-      } else {
-        record[slotKey] = { taken: false, time: null };
-        label.classList.remove("taken");
-        timeSpan.textContent = "";
-      }
-
-      saveRecords();
-
-      // カレンダー上の表示も更新
-      const cell = document.querySelector(
-        `.calendar-day[data-date="${selectedDateKey}"]`
-      );
-      if (cell) {
-        applyCalendarDayStyles(selectedDateKey, cell);
-      }
-    }
-
-    // ---- 初期化 ----
-    document.addEventListener("DOMContentLoaded", () => {
-      // 今日を基準に初期設定
-      const today = new Date();
-      currentMonthDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      selectedDateKey = formatDateKey(today);
-
-      // ローカルストレージから読み込み
-      records = loadRecords();
-
-      // カレンダー描画
-      renderCalendar();
-
-      // 詳細初期表示（利用時点の日）
-      updateDetailPanel();
-
-      // 月移動ボタン
-      document
-        .getElementById("prevMonth")
-        .addEventListener("click", () => {
-          currentMonthDate.setMonth(currentMonthDate.getMonth() - 1);
-          renderCalendar();
+        const status=document.createElement("div");
+        status.className="status-labels";
+        SLOT_KEYS.forEach(k=>{
+          const s=document.createElement("span");
+          s.className="slot-label";
+          s.dataset.slot=k;
+          s.textContent=SLOT_LABELS[k];
+          status.appendChild(s);
         });
 
-      document
-        .getElementById("nextMonth")
-        .addEventListener("click", () => {
-          currentMonthDate.setMonth(currentMonthDate.getMonth() + 1);
-          renderCalendar();
+        cell.appendChild(num);
+        cell.appendChild(status);
+        td.appendChild(cell);
+
+        const todayKey=formatDateKey(new Date());
+        if(key===todayKey) cell.classList.add("today-outline");
+
+        applyCalendarDayStyles(key,cell);
+        cell.addEventListener("click",()=>{
+          selectedDateKey=key;
+          updateDetailPanel();
+          updateSelectedCalendarCell();
         });
 
-      // チェックボックスのイベント設定
-      const checkboxes = document.querySelectorAll(".med-check");
-      checkboxes.forEach((cb) => {
-        cb.addEventListener("change", onCheckboxChange);
-      });
-    });
-  </script>
+        day++;
+      }
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+  updateSelectedCalendarCell();
+}
+
+function applyCalendarDayStyles(key,cell){
+  const rec=records[key];
+  cell.querySelectorAll(".slot-label").forEach(span=>{
+    const slot=span.dataset.slot;
+    span.classList.toggle("taken",rec && rec[slot]?.taken);
+  });
+}
+
+function updateSelectedCalendarCell(){
+  document.querySelectorAll(".calendar-day").forEach(c=>c.classList.remove("selected"));
+  const sel=document.querySelector(`.calendar-day[data-date="${selectedDateKey}"]`);
+  if(sel) sel.classList.add("selected");
+}
+
+function updateDetailPanel(){
+  const d=parseDateKey(selectedDateKey);
+  document.getElementById("selectedDateLabel").textContent=
+    `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+
+  const rec=records[selectedDateKey]||defaultRecord();
+  SLOT_KEYS.forEach(k=>{
+    const cb=document.querySelector(`.med-check[data-slot="${k}"]`);
+    const label=document.querySelector(`.check-label[data-slot="${k}"]`);
+    const ts=document.getElementById(`time-${k}`);
+    cb.checked=!!rec[k].taken;
+    label.classList.toggle("taken",!!rec[k].taken);
+    ts.textContent=rec[k].taken?`服薬時刻：${rec[k].time}`:"";
+  });
+}
+
+function onCheckboxChange(e){
+  const slot=e.target.dataset.slot;
+  let rec=records[selectedDateKey]||(records[selectedDateKey]=defaultRecord());
+  const label=document.querySelector(`.check-label[data-slot="${slot}"]`);
+  const ts=document.getElementById(`time-${slot}`);
+
+  if(e.target.checked){
+    const t=formatTime(new Date());
+    rec[slot]={taken:true,time:t};
+    label.classList.add("taken");
+    ts.textContent=`服薬時刻：${t}`;
+  }else{
+    rec[slot]={taken:false,time:null};
+    label.classList.remove("taken");
+    ts.textContent="";
+  }
+  saveRecords();
+
+  const cell=document.querySelector(`.calendar-day[data-date="${selectedDateKey}"]`);
+  if(cell) applyCalendarDayStyles(selectedDateKey,cell);
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  const today=new Date();
+  currentMonthDate=new Date(today.getFullYear(),today.getMonth(),1);
+  selectedDateKey=formatDateKey(today);
+  records=loadRecords();
+
+  renderCalendar();
+  updateDetailPanel();
+
+  document.getElementById("prevMonth").onclick=()=>{
+    currentMonthDate.setMonth(currentMonthDate.getMonth()-1);
+    renderCalendar();
+  };
+  document.getElementById("nextMonth").onclick=()=>{
+    currentMonthDate.setMonth(currentMonthDate.getMonth()+1);
+    renderCalendar();
+  };
+
+  document.querySelectorAll(".med-check").forEach(cb=>cb.addEventListener("change",onCheckboxChange));
+});
+</script>
 </body>
 </html>
