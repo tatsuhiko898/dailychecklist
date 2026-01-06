@@ -3,133 +3,113 @@
 <head>
   <meta charset="UTF-8" />
   <title>服薬記録カレンダー</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-  <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-6 space-y-6">
+
+<body class="min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-pink-50 p-4">
+  <div class="w-full max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-7 space-y-7">
+
     <!-- ヘッダー -->
     <header class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-slate-800">服薬記録カレンダー</h1>
-        <p class="text-xs text-slate-500 mt-1">
-          毎日の朝・昼・晩の服薬状況をカレンダーで確認・記録できます。
+        <h1 class="text-2xl font-bold text-slate-800">服薬記録カレンダー</h1>
+        <p class="text-sm text-slate-600 mt-1">
+          朝・昼・晩の服薬を記録して、あとから確認できます。
         </p>
       </div>
-      <div class="flex items-center gap-2">
+
+      <div class="flex gap-2">
         <button id="prev-month-btn"
-                class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
-          前の月
+                class="text-sm px-3 py-1.5 rounded-full bg-rose-100 text-rose-700 hover:bg-rose-200 transition">
+          ◀ 前の月
         </button>
         <button id="today-btn"
-                class="text-xs px-3 py-1.5 rounded-full bg-sky-500 text-white hover:bg-sky-600 shadow-sm transition">
-          今日
+                class="text-sm px-3 py-1.5 rounded-full bg-emerald-400 text-white shadow hover:bg-emerald-500 transition">
+          今日へ
         </button>
         <button id="next-month-btn"
-                class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
-          次の月
+                class="text-sm px-3 py-1.5 rounded-full bg-sky-100 text-sky-700 hover:bg-sky-200 transition">
+          次の月 ▶
         </button>
       </div>
     </header>
 
-    <!-- カレンダー上部 -->
+    <!-- カレンダー -->
     <section class="space-y-3">
-      <div class="flex items-center justify-between">
-        <div id="month-label" class="text-lg font-semibold text-slate-800"></div>
-      </div>
+      <div id="month-label" class="text-xl font-semibold text-slate-700"></div>
 
-      <div class="border border-slate-200 rounded-2xl p-3 bg-slate-50">
-        <!-- 曜日 -->
-        <div class="grid grid-cols-7 text-center text-[11px] font-semibold text-slate-500 mb-1">
-          <div>月</div>
-          <div>火</div>
-          <div>水</div>
-          <div>木</div>
-          <div>金</div>
+      <div class="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+        <div class="grid grid-cols-7 text-center text-sm font-semibold text-slate-600 mb-2">
+          <div>月</div><div>火</div><div>水</div><div>木</div><div>金</div>
           <div class="text-sky-600">土</div>
           <div class="text-rose-500">日</div>
         </div>
 
-        <!-- カレンダー本体 -->
-        <div id="calendar-grid" class="grid grid-cols-7 gap-1.5 text-[11px]">
-          <!-- JavaScript で生成 -->
+        <div id="calendar-grid" class="grid grid-cols-7 gap-2">
         </div>
       </div>
     </section>
 
-    <!-- 下部 詳細エリア -->
-    <section class="border-t border-slate-200 pt-4 space-y-3">
-      <div class="flex items-center justify-between">
-        <div id="selected-date-label" class="text-base font-semibold text-slate-800"></div>
-        <span class="text-[11px] text-slate-500">
-          チェックすると現在時刻が記録されます
-        </span>
+    <!-- 詳細 -->
+    <section class="border-t border-slate-200 pt-4 space-y-4">
+      <div class="flex justify-between items-center">
+        <div id="selected-date-label" class="text-lg font-semibold text-slate-800"></div>
+        <span class="text-xs text-slate-500">チェックすると現在時刻が保存されます</span>
       </div>
 
-      <div class="space-y-2">
+      <div class="space-y-3">
+
         <!-- 朝 -->
-        <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="morning-checkbox"
-                   class="h-4 w-4 rounded border-slate-300 text-sky-500 focus:ring-sky-400">
-            <span class="text-sm font-medium text-slate-800">朝</span>
+        <div class="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+          <div class="flex items-center gap-3">
+            <input id="morning-checkbox" type="checkbox"
+                   class="h-5 w-5 text-amber-500 rounded focus:ring-amber-400">
+            <span class="text-base font-semibold text-amber-800">朝</span>
           </div>
-          <div id="morning-time-container" class="text-xs text-slate-600 hidden">
+          <div id="morning-time-container" class="hidden text-sm text-amber-700">
             服薬時刻：<span id="morning-time" class="font-mono"></span>
           </div>
         </div>
 
         <!-- 昼 -->
-        <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="noon-checkbox"
-                   class="h-4 w-4 rounded border-slate-300 text-sky-500 focus:ring-sky-400">
-            <span class="text-sm font-medium text-slate-800">昼</span>
+        <div class="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
+          <div class="flex items-center gap-3">
+            <input id="noon-checkbox" type="checkbox"
+                   class="h-5 w-5 text-emerald-500 rounded focus:ring-emerald-400">
+            <span class="text-base font-semibold text-emerald-800">昼</span>
           </div>
-          <div id="noon-time-container" class="text-xs text-slate-600 hidden">
+          <div id="noon-time-container" class="hidden text-sm text-emerald-700">
             服薬時刻：<span id="noon-time" class="font-mono"></span>
           </div>
         </div>
 
         <!-- 晩 -->
-        <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <div class="flex items-center gap-2">
-            <input type="checkbox" id="evening-checkbox"
-                   class="h-4 w-4 rounded border-slate-300 text-sky-500 focus:ring-sky-400">
-            <span class="text-sm font-medium text-slate-800">晩</span>
+        <div class="flex justify-between items-center bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3">
+          <div class="flex items-center gap-3">
+            <input id="evening-checkbox" type="checkbox"
+                   class="h-5 w-5 text-indigo-500 rounded focus:ring-indigo-400">
+            <span class="text-base font-semibold text-indigo-800">晩</span>
           </div>
-          <div id="evening-time-container" class="text-xs text-slate-600 hidden">
+          <div id="evening-time-container" class="hidden text-sm text-indigo-700">
             服薬時刻：<span id="evening-time" class="font-mono"></span>
           </div>
         </div>
-      </div>
 
-      <p class="text-[11px] text-slate-500 leading-relaxed">
-        ・チェックした時刻が自動的に記録されます。<br>
-        ・チェックを外すと、その時刻の記録と表示は消去されます。<br>
-        ・データはブラウザのローカルストレージに保存されます（このブラウザのみ有効です）。
-      </p>
+      </div>
     </section>
   </div>
 
   <script>
     (function () {
-      const STORAGE_KEY = 'medicationTrackerData_v1_tailwind';
-
-      const periods = {
-        morning: '朝',
-        noon: '昼',
-        evening: '晩'
-      };
-
-      const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const STORAGE_KEY = 'medicationTracker_v2_color';
+      const weekdayNames = ['日','月','火','水','木','金','土'];
 
       let data = {};
-      let currentYear, currentMonth;
       let selectedDate;
+      let currentYear, currentMonth;
 
-      const monthLabel = document.getElementById('month-label');
       const calendarGrid = document.getElementById('calendar-grid');
+      const monthLabel = document.getElementById('month-label');
       const selectedDateLabel = document.getElementById('selected-date-label');
 
       const morningCheckbox = document.getElementById('morning-checkbox');
@@ -140,315 +120,145 @@
       const noonTimeContainer = document.getElementById('noon-time-container');
       const eveningTimeContainer = document.getElementById('evening-time-container');
 
-      const morningTimeSpan = document.getElementById('morning-time');
-      const noonTimeSpan = document.getElementById('noon-time');
-      const eveningTimeSpan = document.getElementById('evening-time');
+      const morningTime = document.getElementById('morning-time');
+      const noonTime = document.getElementById('noon-time');
+      const eveningTime = document.getElementById('evening-time');
 
-      function pad(num) {
-        return num.toString().padStart(2, '0');
+      function pad(n){return n.toString().padStart(2,'0');}
+      function key(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+
+      function load(){
+        try{ data=JSON.parse(localStorage.getItem(STORAGE_KEY))||{} }catch{ data={}; }
+      }
+      function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(data)); }
+
+      function getDay(k){
+        if(!data[k]) data[k]={morning:{c:false,t:null},noon:{c:false,t:null},evening:{c:false,t:null}};
+        return data[k];
       }
 
-      function getDateKey(dateObj) {
-        const y = dateObj.getFullYear();
-        const m = pad(dateObj.getMonth() + 1);
-        const d = pad(dateObj.getDate());
-        return `${y}-${m}-${d}`;
-      }
+      function render(){
+        monthLabel.textContent=`${currentYear}年${currentMonth+1}月`;
+        calendarGrid.innerHTML='';
 
-      function loadData() {
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            data = JSON.parse(stored);
-          } else {
-            data = {};
-          }
-        } catch (e) {
-          console.error('ローカルストレージからの読み込みに失敗しました:', e);
-          data = {};
-        }
-      }
+        const first=new Date(currentYear,currentMonth,1);
+        const last=new Date(currentYear,currentMonth+1,0);
+        const offset=(first.getDay()+6)%7;
 
-      function saveData() {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        } catch (e) {
-          console.error('ローカルストレージへの保存に失敗しました:', e);
-        }
-      }
-
-      function getDayData(dateKey) {
-        if (!data[dateKey]) {
-          data[dateKey] = {
-            morning: { checked: false, time: null },
-            noon: { checked: false, time: null },
-            evening: { checked: false, time: null }
-          };
-        }
-        return data[dateKey];
-      }
-
-      function formatJapaneseDate(dateObj) {
-        const y = dateObj.getFullYear();
-        const m = dateObj.getMonth() + 1;
-        const d = dateObj.getDate();
-        const weekday = weekdayNames[dateObj.getDay()];
-        return `${y}年${m}月${d}日（${weekday}）`;
-      }
-
-      function renderCalendar(year, month) {
-        monthLabel.textContent = `${year}年${month + 1}月`;
-
-        calendarGrid.innerHTML = '';
-
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-
-        // 月曜始まりのオフセット
-        const jsDayOfWeek = firstDay.getDay(); // 0=日〜6=土
-        const offset = (jsDayOfWeek + 6) % 7;  // 0=月〜6=日
-
-        // 空セル
-        for (let i = 0; i < offset; i++) {
-          const emptyCell = document.createElement('div');
-          emptyCell.className = 'rounded-2xl min-h-[68px]';
-          calendarGrid.appendChild(emptyCell);
+        for(let i=0;i<offset;i++){
+          const div=document.createElement('div');
+          calendarGrid.appendChild(div);
         }
 
-        // 日付セル
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateObj = new Date(year, month, day);
-          const dateKey = getDateKey(dateObj);
+        for(let d=1;d<=last.getDate();d++){
+          const date=new Date(currentYear,currentMonth,d);
+          const k=key(date);
+          const dayData=getDay(k);
 
-          const dayCell = document.createElement('div');
-          dayCell.dataset.date = dateKey;
-          dayCell.className = [
-            'day-cell',
-            'flex flex-col justify-between',
-            'rounded-2xl',
-            'border',
-            'border-slate-200',
-            'bg-white',
-            'min-h-[68px]',
-            'px-2 py-1.5',
-            'cursor-pointer',
-            'transition',
-            'hover:border-sky-400 hover:bg-sky-50'
-          ].join(' ');
+          const cell=document.createElement('div');
+          cell.dataset.date=k;
+          cell.className="rounded-2xl border bg-white min-h-[70px] p-2 cursor-pointer shadow hover:shadow-md transition";
 
-          const dateNumberDiv = document.createElement('div');
-          dateNumberDiv.className = 'flex items-center justify-between text-[11px] mb-1';
+          const top=document.createElement('div');
+          top.className="text-sm font-bold";
+          top.textContent=d;
+          cell.appendChild(top);
 
-          const dateSpan = document.createElement('span');
-          dateSpan.textContent = day;
-          dateSpan.className = 'font-medium text-slate-800';
+          const row=document.createElement('div');
+          row.className="flex justify-between mt-2";
 
-          // 週末の色
-          const dow = dateObj.getDay();
-          if (dow === 0) {
-            dateSpan.classList.add('text-rose-500');
-          } else if (dow === 6) {
-            dateSpan.classList.add('text-sky-600');
+          function pill(label,flag,color){
+            const s=document.createElement('span');
+            s.textContent=label;
+            s.className= flag
+              ? `text-${color}-700 font-bold`
+              : 'text-slate-300';
+            return s;
           }
 
-          dateNumberDiv.appendChild(dateSpan);
-          dayCell.appendChild(dateNumberDiv);
+          row.appendChild(pill('朝',dayData.morning.c,'amber'));
+          row.appendChild(pill('昼',dayData.noon.c,'emerald'));
+          row.appendChild(pill('晩',dayData.evening.c,'indigo'));
+          cell.appendChild(row);
 
-          const statusRowDiv = document.createElement('div');
-          statusRowDiv.className = 'flex justify-between gap-1';
+          cell.onclick=()=>setSelected(date);
+          calendarGrid.appendChild(cell);
+        }
 
-          Object.keys(periods).forEach(periodKey => {
-            const span = document.createElement('span');
-            span.dataset.period = periodKey;
-            span.textContent = periods[periodKey];
-            span.className = 'med-label text-[11px] text-slate-300';
-            statusRowDiv.appendChild(span);
+        highlight();
+      }
+
+      function highlight(){
+        const k=key(selectedDate);
+        document.querySelectorAll('#calendar-grid div[data-date]')
+          .forEach(c=>{
+            c.classList.remove('ring-2','ring-emerald-400');
+            if(c.dataset.date===k) c.classList.add('ring-2','ring-emerald-400');
           });
+      }
 
-          dayCell.appendChild(statusRowDiv);
+      function setSelected(date){
+        selectedDate=new Date(date);
+        const k=key(selectedDate);
+        const dd=getDay(k);
+        selectedDateLabel.textContent=
+          `${selectedDate.getFullYear()}年${selectedDate.getMonth()+1}月${selectedDate.getDate()}日（${weekdayNames[selectedDate.getDay()]}）`;
 
-          dayCell.addEventListener('click', () => {
-            setSelectedDate(dateObj);
-          });
-
-          calendarGrid.appendChild(dayCell);
-
-          applyStatusToDayCell(dateKey);
+        function bind(cb,box,time,cont){
+          cb.checked=box.c;
+          if(box.c){ cont.classList.remove('hidden'); time.textContent=box.t; }
+          else{ cont.classList.add('hidden'); time.textContent='';}
         }
 
-        highlightSelectedDate();
+        bind(morningCheckbox,dd.morning,morningTime,morningTimeContainer);
+        bind(noonCheckbox,dd.noon,noonTime,noonTimeContainer);
+        bind(eveningCheckbox,dd.evening,eveningTime,eveningTimeContainer);
+
+        highlight();
       }
 
-      function applyStatusToDayCell(dateKey) {
-        const dayData = data[dateKey];
-        const dayCell = calendarGrid.querySelector(`.day-cell[data-date="${dateKey}"]`);
-        if (!dayCell) return;
-
-        const labels = dayCell.querySelectorAll('.med-label');
-        labels.forEach(label => {
-          const periodKey = label.dataset.period;
-          const checked = dayData && dayData[periodKey] && dayData[periodKey].checked;
-
-          label.classList.remove('text-sky-600', 'font-semibold', 'text-slate-300');
-
-          if (checked) {
-            label.classList.add('text-sky-600', 'font-semibold');
-          } else {
-            label.classList.add('text-slate-300');
-          }
-        });
-      }
-
-      function highlightSelectedDate() {
-        const dateKey = getDateKey(selectedDate);
-        const cells = calendarGrid.querySelectorAll('.day-cell');
-        cells.forEach(cell => {
-          cell.classList.remove('ring-2', 'ring-sky-400', 'border-sky-400', 'bg-sky-50');
-          if (cell.dataset.date === dateKey) {
-            cell.classList.add('ring-2', 'ring-sky-400', 'border-sky-400', 'bg-sky-50');
-          }
-        });
-      }
-
-      function updateDetailPanel() {
-        const dateKey = getDateKey(selectedDate);
-        const dayData = getDayData(dateKey);
-
-        selectedDateLabel.textContent = formatJapaneseDate(selectedDate);
-
-        // 朝
-        morningCheckbox.checked = dayData.morning.checked;
-        if (dayData.morning.checked && dayData.morning.time) {
-          morningTimeContainer.classList.remove('hidden');
-          morningTimeSpan.textContent = dayData.morning.time;
-        } else {
-          morningTimeContainer.classList.add('hidden');
-          morningTimeSpan.textContent = '';
+      function toggle(kind,cb,time,cont){
+        const k=key(selectedDate);
+        const dd=getDay(k);
+        if(cb.checked){
+          const now=new Date();
+          const t=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
+          dd[kind].c=true; dd[kind].t=t;
+          cont.classList.remove('hidden'); time.textContent=t;
+        }else{
+          dd[kind].c=false; dd[kind].t=null;
+          cont.classList.add('hidden'); time.textContent='';
         }
-
-        // 昼
-        noonCheckbox.checked = dayData.noon.checked;
-        if (dayData.noon.checked && dayData.noon.time) {
-          noonTimeContainer.classList.remove('hidden');
-          noonTimeSpan.textContent = dayData.noon.time;
-        } else {
-          noonTimeContainer.classList.add('hidden');
-          noonTimeSpan.textContent = '';
-        }
-
-        // 晩
-        eveningCheckbox.checked = dayData.evening.checked;
-        if (dayData.evening.checked && dayData.evening.time) {
-          eveningTimeContainer.classList.remove('hidden');
-          eveningTimeSpan.textContent = dayData.evening.time;
-        } else {
-          eveningTimeContainer.classList.add('hidden');
-          eveningTimeSpan.textContent = '';
-        }
-
-        applyStatusToDayCell(dateKey);
-        highlightSelectedDate();
+        save(); render();
       }
 
-      function setSelectedDate(dateObj) {
-        selectedDate = new Date(
-          dateObj.getFullYear(),
-          dateObj.getMonth(),
-          dateObj.getDate()
-        );
-        updateDetailPanel();
+      function init(){
+        load();
+        const today=new Date();
+        currentYear=today.getFullYear();
+        currentMonth=today.getMonth();
+        selectedDate=today;
+
+        render(); setSelected(today);
+
+        document.getElementById('prev-month-btn').onclick=()=>{
+          currentMonth--; if(currentMonth<0){currentMonth=11;currentYear--;}
+          selectedDate=new Date(currentYear,currentMonth,1);
+          render(); setSelected(selectedDate);
+        };
+        document.getElementById('next-month-btn').onclick=()=>{
+          currentMonth++; if(currentMonth>11){currentMonth=0;currentYear++;}
+          selectedDate=new Date(currentYear,currentMonth,1);
+          render(); setSelected(selectedDate);
+        };
+        document.getElementById('today-btn').onclick=()=>{
+          const n=new Date(); currentYear=n.getFullYear(); currentMonth=n.getMonth(); setSelected(n); render();
+        };
+
+        morningCheckbox.onchange=()=>toggle('morning',morningCheckbox,morningTime,morningTimeContainer);
+        noonCheckbox.onchange=()=>toggle('noon',noonCheckbox,noonTime,noonTimeContainer);
+        eveningCheckbox.onchange=()=>toggle('evening',eveningCheckbox,eveningTime,eveningTimeContainer);
       }
-
-      function handleCheckboxChange(periodKey) {
-        const dateKey = getDateKey(selectedDate);
-        const dayData = getDayData(dateKey);
-
-        let checkboxElement;
-        let timeContainer;
-        let timeSpan;
-
-        if (periodKey === 'morning') {
-          checkboxElement = morningCheckbox;
-          timeContainer = morningTimeContainer;
-          timeSpan = morningTimeSpan;
-        } else if (periodKey === 'noon') {
-          checkboxElement = noonCheckbox;
-          timeContainer = noonTimeContainer;
-          timeSpan = noonTimeSpan;
-        } else if (periodKey === 'evening') {
-          checkboxElement = eveningCheckbox;
-          timeContainer = eveningTimeContainer;
-          timeSpan = eveningTimeSpan;
-        }
-
-        const isChecked = checkboxElement.checked;
-
-        if (isChecked) {
-          const now = new Date();
-          const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-          dayData[periodKey].checked = true;
-          dayData[periodKey].time = timeStr;
-          timeContainer.classList.remove('hidden');
-          timeSpan.textContent = timeStr;
-        } else {
-          dayData[periodKey].checked = false;
-          dayData[periodKey].time = null;
-          timeContainer.classList.add('hidden');
-          timeSpan.textContent = '';
-        }
-
-        saveData();
-        applyStatusToDayCell(dateKey);
-      }
-
-      function init() {
-        loadData();
-
-        const today = new Date();
-        currentYear = today.getFullYear();
-        currentMonth = today.getMonth();
-        selectedDate = new Date(currentYear, currentMonth, today.getDate());
-
-        renderCalendar(currentYear, currentMonth);
-        updateDetailPanel();
-
-        document.getElementById('prev-month-btn').addEventListener('click', () => {
-          currentMonth -= 1;
-          if (currentMonth < 0) {
-            currentMonth = 11;
-            currentYear -= 1;
-          }
-          selectedDate = new Date(currentYear, currentMonth, 1);
-          renderCalendar(currentYear, currentMonth);
-          updateDetailPanel();
-        });
-
-        document.getElementById('next-month-btn').addEventListener('click', () => {
-          currentMonth += 1;
-          if (currentMonth > 11) {
-            currentMonth = 0;
-            currentYear += 1;
-          }
-          selectedDate = new Date(currentYear, currentMonth, 1);
-          renderCalendar(currentYear, currentMonth);
-          updateDetailPanel();
-        });
-
-        document.getElementById('today-btn').addEventListener('click', () => {
-          const now = new Date();
-          currentYear = now.getFullYear();
-          currentMonth = now.getMonth();
-          selectedDate = new Date(currentYear, currentMonth, now.getDate());
-          renderCalendar(currentYear, currentMonth);
-          updateDetailPanel();
-        });
-
-        morningCheckbox.addEventListener('change', () => handleCheckboxChange('morning'));
-        noonCheckbox.addEventListener('change', () => handleCheckboxChange('noon'));
-        eveningCheckbox.addEventListener('change', () => handleCheckboxChange('evening'));
-      }
-
       init();
     })();
   </script>
