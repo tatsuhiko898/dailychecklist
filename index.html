@@ -1,279 +1,263 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<title>蔵書管理アプリ（ISBNバーコード読み取り）</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8" />
+  <title>蔵書管理アプリ（ISBNバーコード読み取り）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Quagga -->
-<script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+  <!-- Quagga -->
+  <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
-<style>
-/* ---- カメラ映像調整 ---- */
+  <style>
+    /* ---- カメラ映像調整 ---- */
+    #interactive {
+      position: relative;
+    }
 
-/* Quaggaのコンテナ */
-#interactive { position: relative; }
+    #interactive video,
+    #interactive canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+    }
 
-/* video / canvas は枠いっぱいに */
-#interactive video,
-#interactive canvas {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover;
-}
-
-/* ★ 右半分が黒くなる原因（drawingBuffer）を非表示にする */
-#interactive .drawingBuffer {
-  display: none !important;
-}
-</style>
+    /* Quagga の内部キャンバス（右側が黒く見える原因）を非表示 */
+    #interactive .drawingBuffer {
+      display: none !important;
+    }
+  </style>
 </head>
 
 <body class="bg-slate-100 min-h-screen">
-<div class="max-w-4xl mx-auto px-4 py-6">
-
-<header class="mb-6">
-  <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
-    蔵書管理アプリ
-  </h1>
-  <p class="text-sm text-slate-600">
-    ISBNバーコードを読み取り、書籍情報を登録します。
-  </p>
-</header>
-
-<section class="mb-6">
-  <div class="grid md:grid-cols-[280px,1fr] gap-4">
-    <div>
-      <h2 class="font-semibold mb-2">カメラ</h2>
-
-      <div id="interactive"
-           class="w-full h-48 bg-black/80 rounded-lg overflow-hidden
-                  flex items-center justify-center text-slate-200 text-sm">
-        カメラ停止中
-      </div>
-
-      <div class="mt-3 flex gap-2">
-        <button id="startCameraBtn"
-          class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold">
-          カメラ起動
-        </button>
-
-        <button id="stopCameraBtn"
-          class="px-4 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold">
-          カメラ停止
-        </button>
-      </div>
-
-      <p id="statusMessage" class="mt-2 text-xs text-slate-600">
-        カメラを起動してバーコードをかざしてください。
+  <div class="max-w-4xl mx-auto px-4 py-6">
+    <header class="mb-6">
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+        蔵書管理アプリ
+      </h1>
+      <p class="text-sm text-slate-600">
+        ISBNバーコードを読み取り、書籍情報を登録します。
       </p>
-    </div>
+    </header>
 
-    <div>
-      <h2 class="font-semibold mb-2">読み取り情報</h2>
+    <!-- カメラ＆最新情報 -->
+    <section class="mb-6">
+      <div class="grid md:grid-cols-[280px,1fr] gap-4">
+        <!-- カメラ -->
+        <div>
+          <h2 class="font-semibold mb-2">カメラ</h2>
 
-      <div class="bg-white rounded-xl border p-4 space-y-2">
-        <p class="text-sm">ISBN：<span id="lastIsbn" class="font-mono"></span></p>
-        <p class="text-sm">タイトル：<span id="lastTitle"></span></p>
-        <p class="text-sm">著者：<span id="lastAuthors"></span></p>
-        <p class="text-xs text-slate-500">※ 同じISBNは登録されません。</p>
+          <div id="interactive"
+               class="w-full h-48 bg-black/80 rounded-lg overflow-hidden
+                      flex items-center justify-center text-slate-200 text-sm">
+            カメラ停止中
+          </div>
+
+          <div class="mt-3 flex gap-2">
+            <button id="startCameraBtn"
+              class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold">
+              カメラ起動
+            </button>
+
+            <button id="stopCameraBtn"
+              class="px-4 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold">
+              カメラ停止
+            </button>
+          </div>
+
+          <p id="statusMessage" class="mt-2 text-xs text-slate-600">
+            カメラを起動してバーコードをかざしてください。
+          </p>
+        </div>
+
+        <!-- 最新読み取り結果 -->
+        <div>
+          <h2 class="font-semibold mb-2">読み取り情報</h2>
+
+          <div class="bg-white rounded-xl border p-4 space-y-2">
+            <p class="text-sm">
+              ISBN：<span id="lastIsbn" class="font-mono"></span>
+            </p>
+            <p class="text-sm">
+              タイトル：<span id="lastTitle"></span>
+            </p>
+            <p class="text-sm">
+              著者：<span id="lastAuthors"></span>
+            </p>
+            <p class="text-xs text-slate-500">
+              ※ 同じISBNは重複して登録されません。
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<section>
-  <div class="flex justify-between mb-3">
-    <h2 class="font-semibold">登録済みの書籍リスト</h2>
+    <!-- 書籍リスト -->
+    <section>
+      <div class="flex justify-between mb-3 items-center">
+        <h2 class="font-semibold">登録済みの書籍リスト</h2>
 
-    <button id="clearAllBtn"
-      class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
-      すべて削除
-    </button>
-  </div>
-
-  <div id="booksList" class="space-y-3"></div>
-
-  <p id="emptyMessage" class="text-sm text-slate-500 mt-3">
-    まだ書籍が登録されていません。
-  </p>
-</section>
-
-</div>
-
-<script>
-const STORAGE_KEY = "isbnBookList";
-let books = [];
-let isCameraRunning = false;
-let lastScanTime = 0;
-let lastScanCode = null;
-
-const statusMessage = document.getElementById("statusMessage");
-const lastIsbnEl = document.getElementById("lastIsbn");
-const lastTitleEl = document.getElementById("lastTitle");
-const lastAuthorsEl = document.getElementById("lastAuthors");
-const booksListEl = document.getElementById("booksList");
-const emptyMessageEl = document.getElementById("emptyMessage");
-
-// ----- Storage -----
-function loadBooks() {
-  books = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  render();
-}
-function saveBooks() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
-}
-
-// ----- Render -----
-function render() {
-  booksListEl.innerHTML = "";
-  if (!books.length) {
-    emptyMessageEl.classList.remove("hidden");
-    return;
-  }
-  emptyMessageEl.classList.add("hidden");
-
-  books.forEach((b, i) => {
-    const div = document.createElement("div");
-    div.className = "bg-white border rounded-xl p-4 flex justify-between";
-    div.innerHTML = `
-      <div>
-        <div class="font-semibold">${b.title}</div>
-        <div class="text-sm text-slate-600">著者：${b.authors}</div>
-        <div class="text-xs text-slate-500 font-mono">ISBN：${b.isbn}</div>
+        <button id="clearAllBtn"
+          class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
+          すべて削除
+        </button>
       </div>
-      <button class="text-rose-600 text-sm">削除</button>
-    `;
-    div.querySelector("button").onclick = () => {
-      books.splice(i, 1);
-      saveBooks(); render();
-    };
-    booksListEl.appendChild(div);
-  });
-}
 
-// ----- Book API -----
-async function fetchBook(isbn) {
-  try {
-    const r = await fetch(
-      "https://www.googleapis.com/books/v1/volumes?q=isbn:" + isbn
-    );
-    const d = await r.json();
-    const v = (d.items?.[0]?.volumeInfo) || {};
-    return {
-      title: v.title || "(タイトル不明)",
-      authors: (v.authors || ["(著者不明)"]).join(", ")
-    };
-  } catch {
-    return { title: "(タイトル不明)", authors: "(著者不明)" };
-  }
-}
+      <div id="booksList" class="space-y-3"></div>
 
-async function registerBook(isbn) {
-  if (books.some(b => b.isbn === isbn)) {
-    statusMessage.textContent = "すでに登録されています。";
-    return;
-  }
+      <p id="emptyMessage" class="text-sm text-slate-500 mt-3">
+        まだ書籍が登録されていません。
+      </p>
+    </section>
+  </div>
 
-  statusMessage.textContent = "書籍情報を取得中…";
-  const info = await fetchBook(isbn);
+  <script>
+    // ====== 状態管理 ======
+    const STORAGE_KEY = "isbnBookList";
+    let books = [];
 
-  books.unshift({ isbn, ...info });
-  saveBooks(); render();
+    let isCameraRunning = false;
+    let quaggaInitialized = false;
+    let lastScanTime = 0;
+    let lastScanCode = null;
+    let activeTrack = null; // Quaggaのカメラトラックを保持
 
-  lastIsbnEl.textContent = isbn;
-  lastTitleEl.textContent = info.title;
-  lastAuthorsEl.textContent = info.authors;
+    // DOM
+    const statusMessage = document.getElementById("statusMessage");
+    const lastIsbnEl = document.getElementById("lastIsbn");
+    const lastTitleEl = document.getElementById("lastTitle");
+    const lastAuthorsEl = document.getElementById("lastAuthors");
+    const booksListEl = document.getElementById("booksList");
+    const emptyMessageEl = document.getElementById("emptyMessage");
 
-  statusMessage.textContent = "登録しました。";
-}
-
-// ----- Camera -----
-function startCamera() {
-  if (isCameraRunning) return;
-
-  const target = document.getElementById("interactive");
-  target.innerHTML = "";
-
-  Quagga.init({
-    inputStream: {
-      type: "LiveStream",
-      target,
-      constraints: { facingMode: "environment" }
-    },
-    decoder: { readers: ["ean_reader", "ean_13_reader"] },
-    locate: true
-  }, err => {
-    if (err) {
-      statusMessage.textContent = "カメラ起動に失敗しました。";
-      return;
+    // ====== Storage ======
+    function loadBooks() {
+      try {
+        books = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      } catch {
+        books = [];
+      }
+      render();
     }
-    Quagga.start();
-    isCameraRunning = true;
-    statusMessage.textContent = "バーコードをかざしてください。";
-  });
 
-  Quagga.onDetected(onDetected);
-}
-
-function stopCamera() {
-  if (!isCameraRunning) return;
-
-  try { Quagga.stop(); } catch {}
-  if (Quagga.offDetected) Quagga.offDetected(onDetected);
-
-  // ★ 内部トラックも停止（Android対策）
-  try {
-    if (Quagga.CameraAccess?.getActiveTrack) {
-      const track = Quagga.CameraAccess.getActiveTrack();
-      track?.stop?.();
+    function saveBooks() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
     }
-  } catch {}
 
-  // video側も停止
-  const target = document.getElementById("interactive");
-  const video = target.querySelector("video");
-  if (video?.srcObject) {
-    video.srcObject.getTracks?.().forEach(t => t.stop());
-    video.srcObject = null;
-  }
+    // ====== レンダリング ======
+    function render() {
+      booksListEl.innerHTML = "";
+      if (!books.length) {
+        emptyMessageEl.classList.remove("hidden");
+        return;
+      }
+      emptyMessageEl.classList.add("hidden");
 
-  isCameraRunning = false;
-  target.innerHTML = "カメラ停止中";
-  statusMessage.textContent = "カメラを停止しました。";
-}
+      books.forEach((b, i) => {
+        const div = document.createElement("div");
+        div.className =
+          "bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-start gap-4";
 
-async function onDetected(res) {
-  const code = res?.codeResult?.code;
-  if (!code) return;
+        const info = document.createElement("div");
+        info.innerHTML = `
+          <div class="font-semibold text-sm md:text-base">${b.title}</div>
+          <div class="text-xs md:text-sm text-slate-600">著者：${b.authors}</div>
+          <div class="text-xs text-slate-500 font-mono mt-1">ISBN：${b.isbn}</div>
+        `;
 
-  const now = Date.now();
-  if (code === lastScanCode && now - lastScanTime < 3000) return;
+        const delBtn = document.createElement("button");
+        delBtn.className =
+          "px-3 py-1 rounded-md bg-rose-50 text-rose-600 text-xs font-semibold border border-rose-200";
+        delBtn.textContent = "削除";
+        delBtn.onclick = () => {
+          if (confirm("この書籍を削除しますか？")) {
+            books.splice(i, 1);
+            saveBooks();
+            render();
+          }
+        };
 
-  lastScanCode = code; lastScanTime = now;
+        div.appendChild(info);
+        div.appendChild(delBtn);
+        booksListEl.appendChild(div);
+      });
+    }
 
-  const isbn = code.replace(/\D/g, "");
-  if (isbn.length !== 13 || !/^97[89]/.test(isbn)) {
-    statusMessage.textContent = "ISBNではありません。";
-    return;
-  }
+    // ====== 書籍情報取得（Google Books API） ======
+    async function fetchBookByIsbn(isbn) {
+      try {
+        const res = await fetch(
+          "https://www.googleapis.com/books/v1/volumes?q=isbn:" + isbn
+        );
+        const data = await res.json();
+        const v = data.items?.[0]?.volumeInfo || {};
+        const title = v.title || "(タイトル不明)";
+        const authors = (v.authors || ["(著者不明)"]).join(", ");
+        return { title, authors };
+      } catch (e) {
+        console.error(e);
+        return { title: "(タイトル不明)", authors: "(著者不明)" };
+      }
+    }
 
-  statusMessage.textContent = `ISBN ${isbn} を検出しました。`;
-  await registerBook(isbn);
-}
+    async function registerBook(isbn) {
+      if (books.some(b => b.isbn === isbn)) {
+        statusMessage.textContent = "すでに登録されているISBNです。";
+        const existing = books.find(b => b.isbn === isbn);
+        lastIsbnEl.textContent = existing.isbn;
+        lastTitleEl.textContent = existing.title;
+        lastAuthorsEl.textContent = existing.authors;
+        return;
+      }
 
-// ----- Events -----
-document.getElementById("startCameraBtn").onclick = startCamera;
-document.getElementById("stopCameraBtn").onclick = stopCamera;
-document.getElementById("clearAllBtn").onclick = () => {
-  if (confirm("すべて削除しますか？")) {
-    books = []; saveBooks(); render();
-  }
-};
-window.addEventListener("DOMContentLoaded", loadBooks);
-</script>
-</body>
-</html>
+      statusMessage.textContent = "書籍情報を取得中…";
+      const info = await fetchBookByIsbn(isbn);
+
+      const book = { isbn, title: info.title, authors: info.authors };
+      books.unshift(book);
+      saveBooks();
+      render();
+
+      lastIsbnEl.textContent = isbn;
+      lastTitleEl.textContent = info.title;
+      lastAuthorsEl.textContent = info.authors;
+
+      statusMessage.textContent = "登録しました。";
+    }
+
+    // ====== Quagga: カメラ起動 ======
+    function startCamera() {
+      if (isCameraRunning) {
+        statusMessage.textContent = "すでにカメラは起動中です。";
+        return;
+      }
+
+      const target = document.getElementById("interactive");
+      target.innerHTML = "";
+
+      // 念のため、前のイベントを解除
+      if (Quagga.offDetected) {
+        Quagga.offDetected(onDetected);
+      }
+
+      const config = {
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: target,
+          constraints: {
+            facingMode: "environment",
+            width: { min: 640 },
+            height: { min: 480 }
+          }
+        },
+        locator: {
+          patchSize: "medium",
+          halfSample: true
+        },
+        numOfWorkers: 0,       // ★ Android での安定性重視（ワーカーを使わない）
+        frequency: 10,
+        decoder: {
+          readers: ["ean_reader", "ean_13_reader"]  // ISB_]()
