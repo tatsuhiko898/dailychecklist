@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>蔵書管理アプリ（バーコード読み取り）</title>
+  <title>蔵書管理アプリ（バーコード読み取り＋CSV入出力）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Tailwind -->
@@ -34,7 +34,7 @@
         蔵書管理アプリ
       </h1>
       <p class="text-sm text-slate-600">
-        バーコードを読み取り、書籍情報を登録します。
+        バーコードを読み取り、書籍情報を登録・CSV入出力します。
       </p>
     </header>
 
@@ -49,7 +49,7 @@
                       flex items-center justify-center text-slate-200 text-sm">
             カメラ停止中
           </div>
-          <div class="mt-3 flex gap-2">
+          <div class="mt-3 flex gap-2 flex-wrap">
             <button id="startCameraBtn"
               class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold">
               カメラ起動
@@ -88,14 +88,29 @@
       </div>
     </section>
 
-    <!-- 書籍リスト -->
+    <!-- 書籍リスト ＋ CSV入出力 -->
     <section>
-      <div class="flex justify-between mb-3 items-center">
+      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
         <h2 class="font-semibold">登録済みの書籍リスト</h2>
-        <button id="clearAllBtn"
-          class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
-          すべて削除
-        </button>
+
+        <div class="flex flex-wrap gap-2">
+          <button id="exportBtn"
+            class="px-3 py-1.5 rounded-lg border border-sky-300 text-sky-700 text-xs font-semibold bg-sky-50">
+            エクスポート（CSV）
+          </button>
+
+          <label
+            class="px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 text-xs font-semibold bg-emerald-50 cursor-pointer">
+            インポート（CSV）
+            <input id="importInput" type="file" accept=".csv,text/csv"
+                   class="hidden" />
+          </label>
+
+          <button id="clearAllBtn"
+            class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
+            すべて削除
+          </button>
+        </div>
       </div>
 
       <div id="booksList" class="space-y-3"></div>
@@ -414,7 +429,7 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
-    // ====== バーコード検出共通処理（ISBNチェックを完全撤廃） ======
+    // ====== バーコード検出（ISBNチェック撤廃） ======
     function onBarcodeDetected(code) {
       var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 2000) {
@@ -423,10 +438,8 @@
       lastScanCode = code;
       lastScanTime = now;
 
-      // 数字だけ抽出
       var cleaned = (code || "").replace(/[^0-9]/g, "");
 
-      // デバッグ用に生コード＆数値コードを表示
       lastRawEl.textContent = code + "（長さ " + code.length + "）";
       lastIsbnEl.textContent = cleaned + "（数字だけ・長さ " + cleaned.length + "）";
 
@@ -439,8 +452,154 @@
       statusMessage.textContent =
         "バーコード検出：数値コード " + cleaned + " を登録候補として処理します…";
 
-      // ★ ここでは桁数などを一切チェックせず、そのまま「コード」として登録処理へ進める
       registerBook(cleaned);
+    }
+
+    // ====== CSV エクスポート ======
+    function toCsvField(value) {
+      if (value === null || value === undefined) return "";
+      var s = String(value);
+      if (s.indexOf('"') >= 0 || s.indexOf(",") >= 0 || s.indexOf("\n") >= 0 || s.indexOf("\r") >= 0) {
+        s = '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    function exportBooksToCsv() {
+      if (!books.length) {
+        statusMessage.textContent = "エクスポートするデータがありません。";
+        return;
+      }
+
+      var lines = [];
+      // ヘッダ
+      lines.push(["code", "title", "authors"].map(toCsvField).join(","));
+
+      for (var i = 0; i < books.length; i++) {
+        var b = books[i];
+        var row = [
+          toCsvField(b.isbn),
+          toCsvField(b.title),
+          toCsvField(b.authors)
+        ];
+        lines.push(row.join(","));
+      }
+
+      var csv = lines.join("\r\n");
+      // 日本語Excel対策でBOM付きUTF-8にする
+      var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+      var blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8;" });
+
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      var now = new Date();
+      var y = now.getFullYear();
+      var m = ("0" + (now.getMonth() + 1)).slice(-2);
+      var d = ("0" + now.getDate()).slice(-2);
+      a.download = "books_" + y + m + d + ".csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      statusMessage.textContent = "CSVファイルをエクスポートしました。";
+    }
+
+    // ====== CSV インポート ======
+    function parseCsvLine(line) {
+      var result = [];
+      var current = "";
+      var inQuotes = false;
+      for (var i = 0; i < line.length; i++) {
+        var ch = line[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < line.length && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            current += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ",") {
+            result.push(current);
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    function importBooksFromCsv(text) {
+      var lines = text.split(/\r?\n/);
+      var importedCount = 0;
+      if (!lines.length) return 0;
+
+      // 1行目がヘッダらしき場合は飛ばす
+      var startIndex = 0;
+      if (lines[0].toLowerCase().indexOf("code") !== -1 ||
+          lines[0].toLowerCase().indexOf("isbn") !== -1) {
+        startIndex = 1;
+      }
+
+      for (var i = startIndex; i < lines.length; i++) {
+        var line = lines[i];
+        if (!line.trim()) continue;
+
+        var cols = parseCsvLine(line);
+        var code = (cols[0] || "").trim();
+        var title = (cols[1] || "").trim();
+        var authors = (cols[2] || "").trim();
+
+        if (!code) continue;
+
+        var exists = false;
+        for (var j = 0; j < books.length; j++) {
+          if (books[j].isbn === code) {
+            exists = true;
+            break;
+          }
+        }
+        if (exists) continue;
+
+        var book = {
+          isbn: code,
+          title: title || "(タイトル不明)",
+          authors: authors || "(著者不明)"
+        };
+        books.unshift(book);
+        importedCount++;
+      }
+
+      if (importedCount > 0) {
+        saveBooks();
+        renderBooks();
+      }
+      return importedCount;
+    }
+
+    function handleImportFile(file) {
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var text = e.target.result || "";
+        var count = importBooksFromCsv(text);
+        statusMessage.textContent =
+          "CSVインポート完了：" + count + " 件の書籍を追加しました。";
+      };
+      reader.onerror = function() {
+        statusMessage.textContent = "CSVの読み込み中にエラーが発生しました。";
+      };
+      reader.readAsText(file, "UTF-8");
     }
 
     // ====== イベント登録 ======
@@ -449,7 +608,7 @@
 
     document.getElementById("clearAllBtn").addEventListener("click", function() {
       if (!books.length) return;
-      if (confirm("すべて削除しますか？")) {
+      if (confirm("すべての書籍情報を削除しますか？")) {
         books = [];
         saveBooks();
         renderBooks();
@@ -459,6 +618,18 @@
         lastAuthorsEl.textContent = "";
         statusMessage.textContent = "すべて削除しました。";
       }
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", function() {
+      exportBooksToCsv();
+    });
+
+    document.getElementById("importInput").addEventListener("change", function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      handleImportFile(file);
+      // 同じファイルを連続で選んだときも change が発火するようリセット
+      e.target.value = "";
     });
 
     // ====== 初期化 ======
