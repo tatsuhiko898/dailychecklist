@@ -2,197 +2,374 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>蔵書管理アプリ（バーコード読み取り＋CSV入出力）</title>
+  <title>蔵書管理アプリ（バーコード／CSV対応）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Quagga（フォールバック用） -->
-  <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
-
-  <style>
-    #interactive {
-      position: relative;
-    }
-    #interactive video,
-    #interactive canvas {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-    }
-    #interactive .drawingBuffer {
-      display: none !important;
-    }
-  </style>
+  <!-- Tailwind（ローカル + SRI） -->
+  <script
+    src="vendor/tailwind.js"
+    integrity="sha384-8+w8wtm5WETGRGZ1EZ7VGgFCRHAsneVQXyAu1WdiFk3YuMZRBC6bSzFPxyx0YRYm"
+    crossorigin="anonymous"
+  ></script>
 </head>
-
 <body class="bg-slate-100 min-h-screen">
-  <div class="max-w-4xl mx-auto px-4 py-6">
-    <header class="mb-6">
-      <h1 class="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
+  <div class="max-w-4xl mx-auto px-4 py-6 md:py-10">
+    <header class="mb-6 md:mb-8">
+      <h1 class="text-xl md:text-2xl font-bold text-slate-800">
         蔵書管理アプリ
       </h1>
-      <p class="text-sm text-slate-600">
-        バーコードを読み取り、書籍情報を登録・CSV入出力します。
+      <p class="text-xs md:text-sm text-slate-600 mt-2">
+        カメラでバーコード（ISBN）を読み取って、本の情報を登録できます。<br />
+        また、CSVファイルでのインポート／エクスポートにも対応しています。
       </p>
     </header>
 
     <!-- カメラ & 最新情報 -->
-    <section class="mb-6">
-      <div class="grid md:grid-cols-[280px,1fr] gap-4">
-        <!-- カメラ -->
-        <div>
-          <h2 class="font-semibold mb-2">カメラ</h2>
-          <div id="interactive"
-               class="w-full h-48 bg-black/80 rounded-lg overflow-hidden
-                      flex items-center justify-center text-slate-200 text-sm">
+    <section
+      class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-6 md:mb-10"
+    >
+      <!-- カメラ -->
+      <div
+        class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-6 flex flex-col"
+      >
+        <div class="flex items-center justify-between mb-3 md:mb-4">
+          <h2 class="text-base md:text-lg font-semibold text-slate-800">
+            バーコード読み取り（カメラ）
+          </h2>
+          <span
+            id="camera-status"
+            class="inline-flex items-center gap-1 text-xs md:text-sm px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200"
+          >
+            <span class="w-2 h-2 rounded-full bg-slate-300"></span>
             カメラ停止中
-          </div>
-          <div class="mt-3 flex gap-2 flex-wrap">
-            <button id="startCameraBtn"
-              class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold">
+          </span>
+        </div>
+
+        <div class="space-y-3 md:space-y-4">
+          <div class="flex flex-wrap gap-2">
+            <button
+              id="start-camera"
+              class="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-semibold rounded-full bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 transition"
+            >
               カメラ起動
             </button>
-            <button id="stopCameraBtn"
-              class="px-4 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold">
+            <button
+              id="stop-camera"
+              class="px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-semibold rounded-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition"
+            >
               カメラ停止
             </button>
           </div>
-          <p id="statusMessage" class="mt-2 text-xs text-slate-600">
-            準備完了：カメラ起動ボタンを押してください。（必ず HTTPS または localhost で開いてください）
+          <p id="camera-message" class="text-xs md:text-sm text-slate-600">
+            「カメラ起動」を押すとバーコード読み取りを開始します。
+          </p>
+
+          <div
+            class="mt-1 relative rounded-xl overflow-hidden bg-slate-900 border border-slate-700"
+          >
+            <div
+              id="camera-view"
+              class="relative w-full aspect-[4/3] flex items-center justify-center text-slate-400 text-xs md:text-sm select-none"
+            >
+              カメラ停止中
+            </div>
+          </div>
+
+          <p class="text-[11px] md:text-xs text-slate-500 leading-relaxed">
+            ※ カメラがうまく動作しない場合：<br />
+            ・PCの場合は「https://」で始まるページであること、または「localhost」で開いてください。<br />
+            ・スマートフォンの場合、ブラウザのカメラ使用許可を確認してください。<br />
+            ・読み取りが難しい場合は、ISBNコードを手入力して登録することも可能です。
           </p>
         </div>
+      </div>
 
-        <!-- 最新読み取り結果 -->
-        <div>
-          <h2 class="font-semibold mb-2">読み取り情報</h2>
-          <div class="bg-white rounded-xl border p-4 space-y-2">
-            <p class="text-sm">
-              読み取ったコード：<span id="lastRaw" class="font-mono"></span>
+      <!-- 最新読み取り結果 -->
+      <div
+        class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-6"
+      >
+        <h2 class="text-base md:text-lg font-semibold text-slate-800 mb-3">
+          最新の読み取り結果
+        </h2>
+        <div class="space-y-3">
+          <div class="text-xs md:text-sm text-slate-700">
+            <div class="text-slate-500 text-[11px] md:text-xs mb-1">
+              最後に読み取ったコード
+            </div>
+            <div
+              id="last-isbn"
+              class="font-mono text-sm md:text-base bg-slate-50 border border-slate-200 rounded-md px-2 py-1"
+            >
+              まだ読み取りは行われていません
+            </div>
+          </div>
+          <div class="text-xs md:text-sm text-slate-700">
+            <div class="text-slate-500 text-[11px] md:text-xs mb-1">
+              書籍タイトル
+            </div>
+            <div
+              id="last-title"
+              class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1"
+            >
+              -
+            </div>
+          </div>
+          <div class="text-xs md:text-sm text-slate-700">
+            <div class="text-slate-500 text-[11px] md:text-xs mb-1">
+              著者
+            </div>
+            <div
+              id="last-authors"
+              class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1"
+            >
+              -
+            </div>
+          </div>
+        </div>
+        <p
+          id="status-message"
+          class="mt-4 text-xs md:text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1 hidden"
+        ></p>
+      </div>
+    </section>
+
+    <!-- 手入力 & CSV -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mb-6">
+      <!-- 手入力 -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+        <h2 class="text-base md:text-lg font-semibold text-slate-800 mb-3">
+          ISBN コードの手入力
+        </h2>
+        <p class="text-xs md:text-sm text-slate-600 mb-3">
+          カメラが使えない場合やバーコードがうまく読み取れない場合は、ISBNコードを手入力してください。
+        </p>
+        <div class="flex flex-col gap-3">
+          <input
+            id="isbn-input"
+            type="text"
+            inputmode="numeric"
+            placeholder="例）9784049122204"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 font-mono"
+          />
+          <button
+            id="add-isbn"
+            class="w-full inline-flex justify-center items-center px-4 py-2 text-xs md:text-sm font-semibold rounded-lg bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 transition"
+          >
+            コードを登録
+          </button>
+          <p class="text-[11px] md:text-xs text-slate-500">
+            ※ ISBN-13（13桁の数字）で入力してください。
+          </p>
+        </div>
+      </div>
+
+      <!-- CSV 入出力 -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+        <h2 class="text-base md:text-lg font-semibold text-slate-800 mb-3">
+          CSV インポート / エクスポート
+        </h2>
+        <p class="text-xs md:text-sm text-slate-600 mb-3">
+          登録した書籍情報を CSV ファイルとして保存したり、CSV ファイルから読み込むことができます。
+        </p>
+
+        <div class="space-y-4">
+          <!-- Export -->
+          <div
+            class="border border-slate-200 rounded-xl p-3 flex flex-col gap-2"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-xs md:text-sm font-semibold text-slate-700">
+                エクスポート（書き出し）
+              </span>
+              <button
+                id="export-csv"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-sky-500 text-white hover:bg-sky-600 transition"
+              >
+                CSVをダウンロード
+              </button>
+            </div>
+            <p class="text-[11px] md:text-xs text-slate-500 leading-relaxed">
+              現在登録されている書籍情報を
+              <code class="font-mono bg-slate-50 px-1 py-0.5 rounded"
+                >code,title,authors</code
+              >
+              形式の CSV ファイルとしてダウンロードします。
             </p>
-            <p class="text-sm">
-              使用する数値コード：<span id="lastIsbn" class="font-mono"></span>
-            </p>
-            <p class="text-sm">
-              タイトル：<span id="lastTitle"></span>
-            </p>
-            <p class="text-sm">
-              著者：<span id="lastAuthors"></span>
-            </p>
-            <p class="text-xs text-slate-500">
-              ※ 同じコードは重複して登録されません。
+          </div>
+
+          <!-- Import -->
+          <div
+            class="border border-slate-200 rounded-xl p-3 flex flex-col gap-2"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-xs md:text-sm font-semibold text-slate-700">
+                インポート（読み込み）
+              </span>
+              <label
+                class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-violet-500 text-white hover:bg-violet-600 transition cursor-pointer"
+              >
+                CSVファイルを選択
+                <input
+                  id="import-csv"
+                  type="file"
+                  accept=".csv,text/csv"
+                  class="hidden"
+                />
+              </label>
+            </div>
+            <p class="text-[11px] md:text-xs text-slate-500 leading-relaxed">
+              <span class="font-semibold">フォーマット：</span>
+              1行目にヘッダ
+              <code class="font-mono bg-slate-50 px-1 py-0.5 rounded"
+                >code,title,authors</code
+              >
+              を記述し、2行目以降にデータ行を記述してください。<br />
+              code は ISBN（13桁の数字）、title は書籍名、authors
+              は著者名（カンマ区切り可）です。
             </p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 書籍リスト ＋ CSV入出力 -->
-    <section>
-      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
-        <h2 class="font-semibold">登録済みの書籍リスト</h2>
-
-        <div class="flex flex-wrap gap-2">
-          <button id="exportBtn"
-            class="px-3 py-1.5 rounded-lg border border-sky-300 text-sky-700 text-xs font-semibold bg-sky-50">
-            エクスポート（CSV）
-          </button>
-
-          <label
-            class="px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 text-xs font-semibold bg-emerald-50 cursor-pointer">
-            インポート（CSV）
-            <input id="importInput" type="file" accept=".csv,text/csv"
-                   class="hidden" />
-          </label>
-
-          <button id="clearAllBtn"
-            class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 text-xs font-semibold">
-            すべて削除
-          </button>
-        </div>
+    <!-- 登録済み一覧 -->
+    <section class="mb-8">
+      <div class="flex items-center justify-between mb-3 md:mb-4">
+        <h2 class="text-base md:text-lg font-semibold text-slate-800">
+          登録済みの書籍一覧
+        </h2>
+        <button
+          id="clear-all"
+          class="text-xs md:text-sm px-3 py-1.5 rounded-full border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition"
+        >
+          すべて削除
+        </button>
       </div>
-
-      <div id="booksList" class="space-y-3"></div>
-
-      <p id="emptyMessage" class="text-sm text-slate-500 mt-3">
-        まだ書籍が登録されていません。
+      <p
+        id="books-empty-message"
+        class="text-xs md:text-sm text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-xl px-3 py-2"
+      >
+        まだ書籍は登録されていません。バーコードの読み取りや ISBN
+        の手入力、CSVインポートで書籍を追加してください。
       </p>
+      <div
+        id="books-list"
+        class="mt-3 md:mt-4 space-y-3 md:space-y-4 text-xs md:text-sm"
+      ></div>
     </section>
+
+    <footer class="pt-4 border-t border-slate-200 text-[11px] md:text-xs text-slate-500">
+      <p class="mb-1">
+        ・本アプリはブラウザのローカルストレージにのみデータを保存します。サーバには送信されません。
+      </p>
+      <p>
+        ・ISBNから書籍情報を取得する際、Google Books API にアクセスします。その際、ISBNコードがGoogleに送信されます。
+      </p>
+    </footer>
   </div>
 
+  <!-- QuaggaJS（ローカル + SRI） -->
+  <script
+    src="vendor/quagga.min.js"
+    integrity="sha384-sl2LNalPRD3qrS3TKmINXWwRcQKf9cUlNZGd8pqjlpzwbzgMsFgE+133u4kM32IR"
+    crossorigin="anonymous"
+  ></script>
+
   <script>
-    // ====== グローバル状態 ======
-    var STORAGE_KEY = "isbnBookList";
+    // ====== DOM取得 ======
+    var cameraStatusEl = document.getElementById("camera-status");
+    var cameraMessageEl = document.getElementById("camera-message");
+    var cameraViewEl = document.getElementById("camera-view");
+    var startCameraBtn = document.getElementById("start-camera");
+    var stopCameraBtn = document.getElementById("stop-camera");
+
+    var lastIsbnEl = document.getElementById("last-isbn");
+    var lastTitleEl = document.getElementById("last-title");
+    var lastAuthorsEl = document.getElementById("last-authors");
+    var statusMessage = document.getElementById("status-message");
+
+    var isbnInput = document.getElementById("isbn-input");
+    var addIsbnBtn = document.getElementById("add-isbn");
+
+    var exportCsvBtn = document.getElementById("export-csv");
+    var importCsvInput = document.getElementById("import-csv");
+
+    var booksListEl = document.getElementById("books-list");
+    var booksEmptyMessageEl = document.getElementById("books-empty-message");
+    var clearAllBtn = document.getElementById("clear-all");
+
+    // ====== 状態管理 ======
     var books = [];
+    var lastScannedTime = 0;
+    var lastScannedCode = null;
 
-    var isCameraRunning = false;
-    var lastScanTime = 0;
-    var lastScanCode = null;
+    var STORAGE_KEY = "isbnBookList";
 
-    var currentStream = null;
-    var currentVideoEl = null;
-    var scanCanvas = null;
-    var scanContext = null;
-    var scanTimerId = null;
-
-    var statusMessage = document.getElementById("statusMessage");
-    var lastRawEl = document.getElementById("lastRaw");
-    var lastIsbnEl = document.getElementById("lastIsbn");
-    var lastTitleEl = document.getElementById("lastTitle");
-    var lastAuthorsEl = document.getElementById("lastAuthors");
-    var booksListEl = document.getElementById("booksList");
-    var emptyMessageEl = document.getElementById("emptyMessage");
-
-    var barcodeDetector = null; // 標準API
-
-    // ====== ローカルストレージ ======
+    // ローカルストレージから読み込み
     function loadBooks() {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        books = [];
+        return;
+      }
       try {
-        var raw = localStorage.getItem(STORAGE_KEY);
-        books = raw ? JSON.parse(raw) : [];
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          books = parsed;
+        } else {
+          books = [];
+        }
       } catch (e) {
+        console.error("Failed to parse books from localStorage", e);
         books = [];
       }
-      renderBooks();
     }
 
     function saveBooks() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
     }
 
+    // ====== 表示更新 ======
     function renderBooks() {
       booksListEl.innerHTML = "";
       if (!books.length) {
-        emptyMessageEl.classList.remove("hidden");
+        booksEmptyMessageEl.classList.remove("hidden");
         return;
       }
-      emptyMessageEl.classList.add("hidden");
+      booksEmptyMessageEl.classList.add("hidden");
 
       for (var i = 0; i < books.length; i++) {
-        (function(index) {
+        (function (index) {
           var b = books[index];
           var item = document.createElement("div");
           item.className =
             "bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-start gap-4";
 
           var info = document.createElement("div");
-          info.innerHTML =
-            '<div class="font-semibold text-sm md:text-base">' +
-              b.title +
-            '</div>' +
-            '<div class="text-xs md:text-sm text-slate-600">著者：' +
-              b.authors +
-            '</div>' +
-            '<div class="text-xs text-slate-500 font-mono mt-1">コード：' +
-              b.isbn +
-            '</div>';
+
+          // タイトル
+          var titleEl = document.createElement("div");
+          titleEl.className = "font-semibold text-sm md:text-base";
+          titleEl.textContent = b.title;
+
+          // 著者
+          var authorsEl = document.createElement("div");
+          authorsEl.className = "text-xs md:text-sm text-slate-600";
+          authorsEl.textContent = "著者：" + b.authors;
+
+          // コード
+          var codeEl = document.createElement("div");
+          codeEl.className = "text-xs text-slate-500 font-mono mt-1";
+          codeEl.textContent = "コード：" + b.isbn;
+
+          info.appendChild(titleEl);
+          info.appendChild(authorsEl);
+          info.appendChild(codeEl);
 
           var delBtn = document.createElement("button");
           delBtn.className =
             "px-3 py-1 rounded-md bg-rose-50 text-rose-600 text-xs font-semibold border border-rose-200";
           delBtn.textContent = "削除";
-          delBtn.onclick = function() {
+          delBtn.onclick = function () {
             if (confirm("この書籍を削除しますか？")) {
               books.splice(index, 1);
               saveBooks();
@@ -210,19 +387,29 @@
     // ====== 書籍情報取得 ======
     function fetchBookByIsbn(isbn) {
       return fetch("https://www.googleapis.com/books/v1/volumes?q=isbn:" + isbn)
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          var v = (data.items && data.items[0] && data.items[0].volumeInfo) || {};
-          var title = v.title || "(タイトル不明)";
-          var authors = v.authors || ["(著者不明)"];
+        .then(function (res) {
+          if (!res.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data.items || !data.items.length) {
+            return {
+              title: "(タイトル不明)",
+              authors: "(著者不明)",
+            };
+          }
+          var vol = data.items[0].volumeInfo || {};
           return {
-            title: title,
-            authors: authors.join(", ")
+            title: vol.title || "(タイトル不明)",
+            authors: (vol.authors || ["(著者不明)"]).join(", "),
           };
-        })["catch"](function() {
+        })
+        .catch(function () {
           return {
             title: "(タイトル不明)",
-            authors: "(著者不明)"
+            authors: "(著者不明)",
           };
         });
     }
@@ -231,6 +418,7 @@
       for (var i = 0; i < books.length; i++) {
         if (books[i].isbn === isbn) {
           statusMessage.textContent = "このコードはすでに登録されています。";
+          statusMessage.classList.remove("hidden");
           lastIsbnEl.textContent = books[i].isbn;
           lastTitleEl.textContent = books[i].title;
           lastAuthorsEl.textContent = books[i].authors;
@@ -238,421 +426,330 @@
         }
       }
 
-      statusMessage.textContent = "書籍情報を取得中…";
+      statusMessage.textContent = "書籍情報を取得しています...";
+      statusMessage.classList.remove("hidden");
 
-      fetchBookByIsbn(isbn).then(function(info) {
+      fetchBookByIsbn(isbn).then(function (info) {
         var book = {
           isbn: isbn,
           title: info.title,
-          authors: info.authors
+          authors: info.authors,
         };
-        books.unshift(book);
+        books.push(book);
         saveBooks();
         renderBooks();
 
         lastIsbnEl.textContent = isbn;
         lastTitleEl.textContent = info.title;
         lastAuthorsEl.textContent = info.authors;
-        statusMessage.textContent = "登録しました。";
+        statusMessage.textContent = "書籍を登録しました。";
       });
     }
 
-    // ====== カメラ起動 ======
+    // ====== カメラ／バーコード ======
+    var isCameraActive = false;
+
     function startCamera() {
-      statusMessage.textContent = "カメラ起動処理を開始します…";
-
-      if (isCameraRunning) {
-        statusMessage.textContent = "すでにカメラは起動中です。";
-        return;
-      }
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        statusMessage.textContent =
-          "このブラウザは getUserMedia に対応していません。";
-        return;
-      }
-
-      var target = document.getElementById("interactive");
-      target.innerHTML = "";
-
-      var video = document.createElement("video");
-      video.setAttribute("autoplay", "true");
-      video.setAttribute("playsinline", "true");
-      video.setAttribute("muted", "true");
-      video.className = "w-full h-full object-cover";
-      currentVideoEl = video;
-      target.appendChild(video);
+      if (isCameraActive) return;
 
       var constraints = {
-        video: { facingMode: { ideal: "environment" } },
-        audio: false
+        width: 640,
+        height: 480,
+        facingMode: "environment",
       };
 
-      navigator.mediaDevices.getUserMedia(constraints)
-        .then(function(stream) {
-          currentStream = stream;
-          video.srcObject = stream;
-          video.onloadedmetadata = function() {
-            video.play();
-          };
-          isCameraRunning = true;
+      cameraMessageEl.textContent =
+        "カメラ起動しました。バーコードを中央にかざしてください。";
+      cameraViewEl.innerHTML = "";
+
+      var liveRegion = document.createElement("div");
+      liveRegion.setAttribute("aria-live", "off");
+
+      var textOverlay = document.createElement("div");
+      textOverlay.textContent = "カメラを起動中...";
+      textOverlay.className =
+        "absolute inset-0 flex items-center justify中心 text-slate-300 text-xs md:text-sm";
+      cameraViewEl.appendChild(textOverlay);
+
+      Quagga.init(
+        {
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: cameraViewEl,
+            constraints: constraints,
+          },
+          decoder: {
+            readers: ["ean_reader"],
+          },
+          locate: true,
+        },
+        function (err) {
+          if (err) {
+            console.error(err);
+            cameraMessageEl.textContent =
+              "カメラの起動に失敗しました。ブラウザの設定や接続状況を確認してください。";
+            cameraViewEl.textContent = "カメラ起動エラー";
+            return;
+          }
+          Quagga.start();
+          isCameraActive = true;
+          cameraStatusEl.innerHTML =
+            '<span class="inline-flex items-center gap-1 text-xs md:text-sm px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">' +
+            '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>スキャン中</span>';
+          cameraViewEl.removeChild(textOverlay);
+        }
+      );
+
+      Quagga.onDetected(function (result) {
+        if (!result || !result.codeResult || !result.codeResult.code) {
+          return;
+        }
+        var code = result.codeResult.code;
+        var now = Date.now();
+
+        if (code === lastScannedCode && now - lastScannedTime < 5000) {
+          return;
+        }
+        lastScannedCode = code;
+        lastScannedTime = now;
+
+        var isbn = code.replace(/[^0-9]/g, "");
+        if (isbn.length !== 13) {
           statusMessage.textContent =
-            "カメラ起動しました。バーコードを中央にかざしてください。";
-
-          startScanningLoop(video);
-        })
-        ["catch"](function(err) {
-          console.error("getUserMedia error:", err);
-          statusMessage.textContent =
-            "カメラ起動に失敗しました（" + err.name +
-            "）。HTTPS または localhost / カメラ権限を確認してください。";
-          isCameraRunning = false;
-          currentStream = null;
-          currentVideoEl = null;
-          target.innerHTML = "カメラ停止中";
-        });
-    }
-
-    // ====== スキャンループ ======
-    function startScanningLoop(video) {
-      if (!scanCanvas) {
-        scanCanvas = document.createElement("canvas");
-        scanContext = scanCanvas.getContext("2d");
-      }
-      if (scanTimerId) {
-        clearInterval(scanTimerId);
-      }
-
-      scanTimerId = setInterval(function() {
-        if (!isCameraRunning) return;
-        if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-        var w = video.videoWidth;
-        var h = video.videoHeight;
-        if (!w || !h) return;
-
-        var maxW = 800;
-        var scale = (w > maxW) ? maxW / w : 1;
-        var dw = Math.floor(w * scale);
-        var dh = Math.floor(h * scale);
-
-        scanCanvas.width = dw;
-        scanCanvas.height = dh;
-        scanContext.drawImage(video, 0, 0, dw, dh);
-
-        if (barcodeDetector) {
-          barcodeDetector.detect(scanCanvas)
-            .then(function(barcodes) {
-              if (!barcodes || !barcodes.length) return;
-              var raw = barcodes[0].rawValue || "";
-              if (!raw) return;
-              onBarcodeDetected(String(raw));
-            })
-            ["catch"](function(err) {
-              console.warn("BarcodeDetector error:", err);
-            });
+            "バーコードは読み取りましたが、ISBN-13ではないようです。";
+          statusMessage.classList.remove("hidden");
+          lastIsbnEl.textContent = code;
+          lastTitleEl.textContent = "-";
+          lastAuthorsEl.textContent = "-";
           return;
         }
 
-        if (typeof Quagga === "undefined") return;
-
-        Quagga.decodeSingle({
-          src: scanCanvas,
-          numOfWorkers: 0,
-          inputStream: {
-            size: 640,
-            singleChannel: true
-          },
-          locator: {
-            patchSize: "medium",
-            halfSample: true
-          },
-          decoder: {
-            readers: ["ean_reader", "ean_13_reader"]
-          },
-          locate: true
-        }, function(result) {
-          if (!result || !result.codeResult || !result.codeResult.code) {
-            return;
-          }
-          var code = result.codeResult.code;
-          onBarcodeDetected(code);
-        });
-      }, 500);
+        registerBook(isbn);
+      });
     }
 
-    // ====== カメラ停止 ======
     function stopCamera() {
-      statusMessage.textContent = "カメラ停止処理を実行します…";
-
-      if (!isCameraRunning && !currentStream && !currentVideoEl) {
-        statusMessage.textContent = "カメラはすでに停止しています。";
-        return;
-      }
-
-      if (scanTimerId) {
-        clearInterval(scanTimerId);
-        scanTimerId = null;
-      }
-
-      if (currentStream && currentStream.getTracks) {
-        try {
-          var tracks = currentStream.getTracks();
-          for (var i = 0; i < tracks.length; i++) {
-            tracks[i].stop();
-          }
-        } catch (e2) {
-          console.warn("currentStream.stop error:", e2);
-        }
-        currentStream = null;
-      }
-
-      if (currentVideoEl) {
-        try { currentVideoEl.pause(); } catch (e3) {}
-        try {
-          if (currentVideoEl.srcObject && currentVideoEl.srcObject.getTracks) {
-            var vTracks = currentVideoEl.srcObject.getTracks();
-            for (var j = 0; j < vTracks.length; j++) {
-              vTracks[j].stop();
-            }
-          }
-        } catch (e4) {}
-        currentVideoEl.srcObject = null;
-        var parent = currentVideoEl.parentNode;
-        if (parent) parent.removeChild(currentVideoEl);
-        currentVideoEl = null;
-      }
-
-      var target = document.getElementById("interactive");
-      target.innerHTML = "カメラ停止中";
-
-      isCameraRunning = false;
-      statusMessage.textContent = "カメラを停止しました。";
+      if (!isCameraActive) return;
+      Quagga.stop();
+      Quagga.offDetected();
+      isCameraActive = false;
+      cameraMessageEl.textContent = "カメラを停止しました。";
+      cameraViewEl.innerHTML = "";
+      cameraViewEl.textContent = "カメラ停止中";
+      cameraStatusEl.innerHTML =
+        '<span class="inline-flex items-center gap-1 text-xs md:text-sm px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200">' +
+        '<span class="w-2 h-2 rounded-full bg-slate-300"></span>カメラ停止中</span>';
     }
 
-    // ====== バーコード検出（ISBNチェック撤廃） ======
-    function onBarcodeDetected(code) {
-      var now = Date.now();
-      if (code === lastScanCode && now - lastScanTime < 2000) {
+    startCameraBtn.addEventListener("click", startCamera);
+    stopCameraBtn.addEventListener("click", stopCamera);
+
+    // ====== 手入力処理 ======
+    addIsbnBtn.addEventListener("click", function () {
+      var val = isbnInput.value.replace(/[^0-9]/g, "");
+      if (!val) {
+        alert("ISBNコードを入力してください。");
         return;
       }
-      lastScanCode = code;
-      lastScanTime = now;
-
-      var cleaned = (code || "").replace(/[^0-9]/g, "");
-
-      lastRawEl.textContent = code + "（長さ " + code.length + "）";
-      lastIsbnEl.textContent = cleaned + "（数字だけ・長さ " + cleaned.length + "）";
-
-      if (!cleaned) {
-        statusMessage.textContent =
-          "バーコードは読み取りましたが、数字が含まれていないため登録できません。";
+      if (val.length !== 13) {
+        alert("ISBN-13（13桁）で入力してください。");
         return;
       }
+      registerBook(val);
+      isbnInput.value = "";
+    });
 
-      statusMessage.textContent =
-        "バーコード検出：数値コード " + cleaned + " を登録候補として処理します…";
-
-      registerBook(cleaned);
-    }
+    isbnInput.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        addIsbnBtn.click();
+      }
+    });
 
     // ====== CSV エクスポート ======
-    function toCsvField(value) {
-      if (value === null || value === undefined) return "";
+    // ★CSVインジェクション対策：= + - @ で始まる値はプレフィックスを付けて数式扱いさせない
+    function sanitizeForSpreadsheet(value) {
+      if (value == null) return "";
       var s = String(value);
-      if (s.indexOf('"') >= 0 || s.indexOf(",") >= 0 || s.indexOf("\n") >= 0 || s.indexOf("\r") >= 0) {
-        s = '"' + s.replace(/"/g, '""') + '"';
+      if (/^[=+\-@]/.test(s)) {
+        s = "'" + s;
       }
       return s;
     }
 
+    function toCsvField(value) {
+      if (value == null) return "";
+      var v = String(value);
+      if (v.includes('"') || v.includes(",") || v.includes("\n")) {
+        v = '"' + v.replace(/"/g, '""') + '"';
+      }
+      return v;
+    }
+
     function exportBooksToCsv() {
       if (!books.length) {
-        statusMessage.textContent = "エクスポートするデータがありません。";
+        alert("エクスポートする書籍がありません。");
         return;
       }
-
       var lines = [];
-      // ヘッダ
+      // ヘッダ行
       lines.push(["code", "title", "authors"].map(toCsvField).join(","));
 
       for (var i = 0; i < books.length; i++) {
         var b = books[i];
+        // ★ 各値をスプレッドシート向けに無害化してから CSV エスケープ
         var row = [
-          toCsvField(b.isbn),
-          toCsvField(b.title),
-          toCsvField(b.authors)
+          toCsvField(sanitizeForSpreadsheet(b.isbn)),
+          toCsvField(sanitizeForSpreadsheet(b.title)),
+          toCsvField(sanitizeForSpreadsheet(b.authors))
         ];
         lines.push(row.join(","));
       }
 
-      var csv = lines.join("\r\n");
-      // 日本語Excel対策でBOM付きUTF-8にする
-      var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-      var blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8;" });
-
+      var csvContent = lines.join("\r\n");
+      var blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       var url = URL.createObjectURL(blob);
+
       var a = document.createElement("a");
       a.href = url;
-      var now = new Date();
-      var y = now.getFullYear();
-      var m = ("0" + (now.getMonth() + 1)).slice(-2);
-      var d = ("0" + now.getDate()).slice(-2);
-      a.download = "books_" + y + m + d + ".csv";
+      a.download = "books.csv";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      statusMessage.textContent = "CSVファイルをエクスポートしました。";
     }
 
+    exportCsvBtn.addEventListener("click", exportBooksToCsv);
+
     // ====== CSV インポート ======
-    function parseCsvLine(line) {
+    function parseCsv(text) {
+      var lines = text.split(/\r?\n/);
       var result = [];
-      var current = "";
-      var inQuotes = false;
-      for (var i = 0; i < line.length; i++) {
-        var ch = line[i];
-        if (inQuotes) {
-          if (ch === '"') {
-            if (i + 1 < line.length && line[i + 1] === '"') {
-              current += '"';
-              i++;
+      var headers = null;
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+
+        var fields = [];
+        var current = "";
+        var inQuotes = false;
+        for (var j = 0; j < line.length; j++) {
+          var ch = line[j];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (j + 1 < line.length && line[j + 1] === '"') {
+                current += '"';
+                j++;
+              } else {
+                inQuotes = false;
+              }
             } else {
-              inQuotes = false;
+              current += ch;
             }
           } else {
-            current += ch;
-          }
-        } else {
-          if (ch === '"') {
-            inQuotes = true;
-          } else if (ch === ",") {
-            result.push(current);
-            current = "";
-          } else {
-            current += ch;
+            if (ch === '"') {
+              inQuotes = true;
+            } else if (ch === ",") {
+              fields.push(current);
+              current = "";
+            } else {
+              current += ch;
+            }
           }
         }
+        fields.push(current);
+
+        if (!headers) {
+          headers = fields;
+        } else {
+          var obj = {};
+          for (var k = 0; k < headers.length; k++) {
+            var key = headers[k];
+            obj[key] = fields[k] || "";
+          }
+          result.push(obj);
+        }
       }
-      result.push(current);
       return result;
     }
 
-    function importBooksFromCsv(text) {
-      var lines = text.split(/\r?\n/);
-      var importedCount = 0;
-      if (!lines.length) return 0;
-
-      // 1行目がヘッダらしき場合は飛ばす
-      var startIndex = 0;
-      if (lines[0].toLowerCase().indexOf("code") !== -1 ||
-          lines[0].toLowerCase().indexOf("isbn") !== -1) {
-        startIndex = 1;
-      }
-
-      for (var i = startIndex; i < lines.length; i++) {
-        var line = lines[i];
-        if (!line.trim()) continue;
-
-        var cols = parseCsvLine(line);
-        var code = (cols[0] || "").trim();
-        var title = (cols[1] || "").trim();
-        var authors = (cols[2] || "").trim();
-
-        if (!code) continue;
-
-        var exists = false;
-        for (var j = 0; j < books.length; j++) {
-          if (books[j].isbn === code) {
-            exists = true;
-            break;
-          }
-        }
-        if (exists) continue;
-
-        var book = {
-          isbn: code,
-          title: title || "(タイトル不明)",
-          authors: authors || "(著者不明)"
-        };
-        books.unshift(book);
-        importedCount++;
-      }
-
-      if (importedCount > 0) {
-        saveBooks();
-        renderBooks();
-      }
-      return importedCount;
-    }
-
-    function handleImportFile(file) {
-      if (!file) return;
+    function importBooksFromCsv(file) {
       var reader = new FileReader();
-      reader.onload = function(e) {
-        var text = e.target.result || "";
-        var count = importBooksFromCsv(text);
-        statusMessage.textContent =
-          "CSVインポート完了：" + count + " 件の書籍を追加しました。";
+      reader.onload = function (e) {
+        var text = e.target.result;
+        var rows = parseCsv(text);
+        var count = 0;
+
+        rows.forEach(function (row) {
+          var code = (row.code || "").replace(/[^0-9]/g, "");
+          if (code.length !== 13) return;
+          var exists = books.some(function (b) {
+            return b.isbn === code;
+          });
+          if (exists) return;
+
+          var title = row.title || "(タイトル不明)";
+          var authors = row.authors || "(著者不明)";
+
+          books.push({
+            isbn: code,
+            title: title,
+            authors: authors,
+          });
+          count++;
+        });
+
+        if (count > 0) {
+          saveBooks();
+          renderBooks();
+          alert(count + "件の書籍をインポートしました。");
+        } else {
+          alert("インポート可能な書籍データが見つかりませんでした。");
+        }
       };
-      reader.onerror = function() {
-        statusMessage.textContent = "CSVの読み込み中にエラーが発生しました。";
-      };
-      reader.readAsText(file, "UTF-8");
+      reader.readAsText(file, "utf-8");
     }
 
-    // ====== イベント登録 ======
-    document.getElementById("startCameraBtn").addEventListener("click", startCamera);
-    document.getElementById("stopCameraBtn").addEventListener("click", stopCamera);
-
-    document.getElementById("clearAllBtn").addEventListener("click", function() {
-      if (!books.length) return;
-      if (confirm("すべての書籍情報を削除しますか？")) {
-        books = [];
-        saveBooks();
-        renderBooks();
-        lastRawEl.textContent = "";
-        lastIsbnEl.textContent = "";
-        lastTitleEl.textContent = "";
-        lastAuthorsEl.textContent = "";
-        statusMessage.textContent = "すべて削除しました。";
-      }
-    });
-
-    document.getElementById("exportBtn").addEventListener("click", function() {
-      exportBooksToCsv();
-    });
-
-    document.getElementById("importInput").addEventListener("change", function(e) {
+    importCsvInput.addEventListener("change", function (e) {
       var file = e.target.files[0];
       if (!file) return;
-      handleImportFile(file);
-      // 同じファイルを連続で選んだときも change が発火するようリセット
+
+      if (!file.name.toLowerCase().endsWith(".csv")) {
+        alert("CSVファイルを選択してください。");
+        return;
+      }
+      importBooksFromCsv(file);
       e.target.value = "";
     });
 
-    // ====== 初期化 ======
-    window.addEventListener("DOMContentLoaded", function() {
-      loadBooks();
-
-      if ("BarcodeDetector" in window) {
-        try {
-          barcodeDetector = new BarcodeDetector({
-            formats: ["ean_13", "ean_8", "code_128", "upc_a", "upc_e"]
-          });
-          statusMessage.textContent =
-            "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector 対応）";
-        } catch (e) {
-          barcodeDetector = null;
-          statusMessage.textContent =
-            "準備完了：カメラ起動ボタンを押してください。（フォールバック: Quagga）";
-        }
-      } else {
-        statusMessage.textContent =
-          "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector なし／Quagga使用）";
+    // ====== 一括削除 ======
+    clearAllBtn.addEventListener("click", function () {
+      if (!books.length) {
+        alert("削除する書籍がありません。");
+        return;
+      }
+      if (confirm("登録されているすべての書籍を削除しますか？")) {
+        books = [];
+        saveBooks();
+        renderBooks();
+        lastIsbnEl.textContent = "まだ読み取りは行われていません";
+        lastTitleEl.textContent = "-";
+        lastAuthorsEl.textContent = "-";
+        statusMessage.textContent = "";
+        statusMessage.classList.add("hidden");
       }
     });
+
+    // ====== 初期化 ======
+    loadBooks();
+    renderBooks();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraMessageEl.textContent =
+        "このブラウザはカメラアクセスに対応していないか、許可されていません。";
+      cameraViewEl.textContent = "カメラ非対応（Quagga使用）";
+    }
   </script>
 </body>
 </html>
