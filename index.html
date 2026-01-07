@@ -14,6 +14,9 @@
   <style>
     #interactive {
       position: relative;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
     }
     #interactive video,
     #interactive canvas {
@@ -157,14 +160,38 @@
           すべて削除
         </button>
       </div>
-      <p id="emptyMessage" class="text-xs text-slate-500 mb-2">
-        まだ書籍は登録されていません。
-      </p>
       <div id="booksList" class="space-y-2 text-sm"></div>
+      <p id="emptyMessage" class="text-sm text-slate-500 mt-3">
+        まだ書籍が登録されていません。
+      </p>
     </section>
   </div>
 
   <script>
+    // ====== グローバル状態 ======
+    var STORAGE_KEY = "isbnBookList";
+    var books = [];
+
+    var isCameraRunning = false;
+    var lastScanTime = 0;
+    var lastScanCode = null;
+
+    var currentStream = null;
+    var currentVideoEl = null;
+
+    var scanCanvas = document.createElement("canvas");
+    var scanContext = scanCanvas.getContext("2d");
+
+    var barcodeDetector = null;
+    if ("BarcodeDetector" in window) {
+      try {
+        barcodeDetector = new BarcodeDetector({ formats: ["ean_13", "ean_8"] });
+      } catch (e) {
+        console.warn("BarcodeDetector 初期化失敗:", e);
+        barcodeDetector = null;
+      }
+    }
+
     // ====== DOM参照 ======
     var interactiveEl   = document.getElementById("interactive");
     var startCameraBtn  = document.getElementById("startCameraBtn");
@@ -185,9 +212,6 @@
     var clearAllBtn     = document.getElementById("clearAllBtn");
 
     // ====== 書籍リスト管理 ======
-    var STORAGE_KEY = "isbnBookList";
-    var books = [];
-
     function loadBooks() {
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
@@ -253,33 +277,50 @@
       });
     }
 
-    // ====== 書籍情報取得（ダミー or API連携に拡張可） ======
-    function fetchBookInfoByIsbn(isbn) {
-      return Promise.resolve({
-        title: "ISBN " + isbn + " の書籍",
-        authors: "不明"
-      });
+    // ====== Google Books API で書籍情報取得 ======
+    function fetchBookByIsbn(isbn) {
+      return fetch("https://www.googleapis.com/books/v1/volumes?q=isbn:" + isbn)
+        .then(function(res) {
+          if (!res.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return res.json();
+        })
+        .then(function(data) {
+          if (!data.items || !data.items.length) {
+            return {
+              title: "(タイトル不明)",
+              authors: "(著者不明)"
+            };
+          }
+          var vol = data.items[0].volumeInfo || {};
+          return {
+            title: vol.title || "(タイトル不明)",
+            authors: (vol.authors || ["(著者不明)"]).join(", ")
+          };
+        })["catch"](function() {
+          return {
+            title: "(タイトル不明)",
+            authors: "(著者不明)"
+          };
+        });
     }
 
-    function registerBookByIsbn(isbn) {
-      isbn = isbn.replace(/[^0-9]/g, "");
-      if (isbn.length !== 13) {
-        alert("ISBN-13（13桁）のコードではありません。");
-        return;
-      }
-
-      var exists = books.some(function(b) { return b.isbn === isbn; });
-      if (exists) {
-        statusMessage.textContent = "このコードはすでに登録されています。";
-        var found = books.find(function(b) { return b.isbn === isbn; });
-        lastCodeEl.textContent    = found.isbn;
-        lastTitleEl.textContent   = found.title;
-        lastAuthorsEl.textContent = found.authors;
-        return;
+    function registerBook(isbn) {
+      // すでに登録されているかチェック
+      for (var i = 0; i < books.length; i++) {
+        if (books[i].isbn === isbn) {
+          statusMessage.textContent = "このコードはすでに登録されています。";
+          lastCodeEl.textContent    = books[i].isbn;
+          lastTitleEl.textContent   = books[i].title;
+          lastAuthorsEl.textContent = books[i].authors;
+          return;
+        }
       }
 
       statusMessage.textContent = "書籍情報を取得しています…";
-      fetchBookInfoByIsbn(isbn).then(function(info) {
+
+      fetchBookByIsbn(isbn).then(function(info) {
         var book = {
           isbn: isbn,
           title: info.title,
@@ -293,19 +334,28 @@
         lastTitleEl.textContent   = info.title;
         lastAuthorsEl.textContent = info.authors;
         statusMessage.textContent = "書籍を登録しました。";
-      }).catch(function(err) {
-        console.error("fetchBookInfoByIsbn error:", err);
-        statusMessage.textContent =
-          "書籍情報の取得に失敗しましたが、コードのみ登録します。";
-        var book = {
-          isbn: isbn,
-          title: "タイトル不明",
-          authors: "著者不明"
-        };
-        books.push(book);
-        saveBooks();
-        renderBooks();
       });
+    }
+
+    // ====== バーコード検出結果の共通処理 ======
+    function handleDetectedCode(rawCode) {
+      var now = Date.now();
+      if (rawCode === lastScanCode && now - lastScanTime < 3000) {
+        // 3秒以内に同じコードが来たら無視
+        return;
+      }
+      lastScanCode = rawCode;
+      lastScanTime = now;
+
+      lastCodeEl.textContent = rawCode;
+
+      var numeric = rawCode.replace(/[^0-9]/g, "");
+      if (numeric.length === 13) {
+        registerBook(numeric);
+      } else {
+        statusMessage.textContent =
+          "バーコードは読み取れましたが、ISBN-13ではないようです。";
+      }
     }
 
     // ====== 手入力登録 ======
@@ -315,7 +365,12 @@
         alert("ISBNコードを入力してください。");
         return;
       }
-      registerBookByIsbn(val);
+      var numeric = val.replace(/[^0-9]/g, "");
+      if (numeric.length !== 13) {
+        alert("ISBN-13（13桁）で入力してください。");
+        return;
+      }
+      registerBook(numeric);
       manualIsbnInput.value = "";
     });
 
@@ -434,8 +489,8 @@
           var exists = books.some(function(b) { return b.isbn === code; });
           if (exists) return;
 
-          var title   = row.title   || "タイトル不明";
-          var authors = row.authors || "著者不明";
+          var title   = row.title   || "(タイトル不明)";
+          var authors = row.authors || "(著者不明)";
 
           books.push({
             isbn: code,
@@ -483,44 +538,6 @@
       statusMessage.textContent = "すべて削除しました。";
     });
 
-    // ====== カメラ / バーコード読み取り ======
-    var isCameraRunning   = false;
-    var currentStream     = null;
-    var currentVideoEl    = null;
-    var scanCanvas        = document.createElement("canvas");
-    var scanContext       = scanCanvas.getContext("2d");
-    var lastDetectedValue = null;
-    var lastDetectedTime  = 0;
-
-    var barcodeDetector = null;
-    if ("BarcodeDetector" in window) {
-      try {
-        barcodeDetector = new BarcodeDetector({ formats: ["ean_13", "ean_8"] });
-      } catch (e) {
-        console.warn("BarcodeDetector 初期化失敗:", e);
-        barcodeDetector = null;
-      }
-    }
-
-    function onBarcodeDetected(rawCode) {
-      var now = Date.now();
-      if (rawCode === lastDetectedValue && now - lastDetectedTime < 3000) {
-        return;
-      }
-      lastDetectedValue = rawCode;
-      lastDetectedTime  = now;
-
-      lastCodeEl.textContent = rawCode;
-
-      var numeric = rawCode.replace(/[^0-9]/g, "");
-      if (numeric.length === 13) {
-        registerBookByIsbn(numeric);
-      } else {
-        statusMessage.textContent =
-          "バーコードは読み取れましたが、ISBN-13ではないようです。";
-      }
-    }
-
     // ====== カメラ起動 ======
     function startCamera() {
       statusMessage.textContent = "カメラ起動処理を開始します…";
@@ -542,7 +559,7 @@
       video.setAttribute("autoplay", "true");
       video.setAttribute("playsinline", "true");
       video.setAttribute("muted", "true");
-      video.className = "w-full h-full object-cover";
+      video.className = "w-full object-contain";
       currentVideoEl = video;
       target.appendChild(video);
 
@@ -554,19 +571,14 @@
       navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) {
           currentStream = stream;
-          isCameraRunning = true;
-          statusMessage.textContent = "カメラを起動しました。バーコードをかざしてください。";
-
-          if ("srcObject" in video) {
-            video.srcObject = stream;
-          } else {
-            video.src = window.URL.createObjectURL(stream);
-          }
-
+          video.srcObject = stream;
           video.onloadedmetadata = function() {
             video.play();
-            startScanLoop();
           };
+          isCameraRunning = true;
+          statusMessage.textContent =
+            "カメラを起動しました。バーコードをかざしてください。";
+          startScanLoop();
         })
         .catch(function(err) {
           console.error("getUserMedia error:", err);
@@ -574,63 +586,6 @@
             "カメラの起動に失敗しました。権限設定や接続状況を確認してください。";
           target.innerHTML = "カメラ起動エラー";
         });
-    }
-
-    // ====== スキャンループ ======
-    function startScanLoop() {
-      if (!currentVideoEl) return;
-
-      function tick() {
-        if (!isCameraRunning || !currentVideoEl) return;
-
-        var video = currentVideoEl;
-        var vw = video.videoWidth || 0;
-        var vh = video.videoHeight || 0;
-        if (!vw || !vh) {
-          requestAnimationFrame(tick);
-          return;
-        }
-
-        var dw = vw;
-        var dh = vh;
-        scanCanvas.width = dw;
-        scanCanvas.height = dh;
-        scanContext.drawImage(video, 0, 0, dw, dh);
-
-        if (barcodeDetector) {
-          barcodeDetector.detect(scanCanvas)
-            .then(function(barcodes) {
-              if (!barcodes || !barcodes.length) return;
-              var raw = barcodes[0].rawValue || "";
-              if (!raw) return;
-              onBarcodeDetected(String(raw));
-            })
-            ["catch"](function(err) {
-              console.warn("BarcodeDetector error:", err);
-            });
-          requestAnimationFrame(tick);
-          return;
-        }
-
-        Quagga.decodeSingle({
-          src: scanCanvas.toDataURL("image/png"),
-          numOfWorkers: 0,
-          inputStream: {
-            size: dw + "x" + dh
-          },
-          decoder: {
-            readers: ["ean_reader", "ean_13_reader"]
-          },
-          locate: true
-        }, function(result) {
-          if (result && result.codeResult && result.codeResult.code) {
-            onBarcodeDetected(result.codeResult.code);
-          }
-          requestAnimationFrame(tick);
-        });
-      }
-
-      requestAnimationFrame(tick);
     }
 
     // ====== カメラ停止 ======
@@ -654,6 +609,66 @@
       statusMessage.textContent = "カメラを停止しました。";
     }
 
+    // ====== スキャンループ ======
+    function startScanLoop() {
+      function tick() {
+        if (!isCameraRunning || !currentVideoEl) return;
+
+        var video = currentVideoEl;
+        var w = video.videoWidth  || 0;
+        var h = video.videoHeight || 0;
+        if (!w || !h) {
+          requestAnimationFrame(tick);
+          return;
+        }
+
+        // 解像度を少し落として処理負荷を軽減
+        var maxW = 800;
+        var scale = (w > maxW) ? maxW / w : 1;
+        var dw = Math.floor(w * scale);
+        var dh = Math.floor(h * scale);
+
+        scanCanvas.width = dw;
+        scanCanvas.height = dh;
+        scanContext.drawImage(video, 0, 0, dw, dh);
+
+        if (barcodeDetector) {
+          barcodeDetector.detect(scanCanvas)
+            .then(function(barcodes) {
+              if (!barcodes || !barcodes.length) return;
+              var raw = barcodes[0].rawValue || "";
+              if (!raw) return;
+              handleDetectedCode(String(raw));
+            })
+            ["catch"](function(err) {
+              console.warn("BarcodeDetector error:", err);
+            });
+          requestAnimationFrame(tick);
+          return;
+        }
+
+        // BarcodeDetector が使えない場合は Quagga に画像を渡す
+        Quagga.decodeSingle({
+          src: scanCanvas.toDataURL("image/png"),
+          numOfWorkers: 0,
+          inputStream: {
+            size: dw + "x" + dh
+          },
+          decoder: {
+            readers: ["ean_reader", "ean_13_reader"]
+          },
+          locate: true
+        }, function(result) {
+          if (result && result.codeResult && result.codeResult.code) {
+            handleDetectedCode(result.codeResult.code);
+          }
+          requestAnimationFrame(tick);
+        });
+      }
+
+      requestAnimationFrame(tick);
+    }
+
     startCameraBtn.addEventListener("click", startCamera);
     stopCameraBtn.addEventListener("click", stopCamera);
 
@@ -662,19 +677,12 @@
       loadBooks();
       renderBooks();
 
-      if ("BarcodeDetector" in window) {
-        try {
-          barcodeDetector = new BarcodeDetector({ formats: ["ean_13", "ean_8"] });
-          statusMessage.textContent =
-            "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector 対応）";
-        } catch (e) {
-          barcodeDetector = null;
-          statusMessage.textContent =
-            "準備完了：カメラ起動ボタンを押してください。（フォールバック: Quagga）";
-        }
+      if (barcodeDetector) {
+        statusMessage.textContent =
+          "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector 対応）";
       } else {
         statusMessage.textContent =
-          "準備完了：カメラ起動ボタンを押してください。（BarcodeDetector なし／Quagga使用）";
+          "準備完了：カメラ起動ボタンを押してください。（フォールバック: Quagga）";
       }
     });
   </script>
